@@ -58,7 +58,7 @@ public class AuditLogService {
                 INSERT INTO audit_log 
                 (user_id, timestamp, action, entity_type, entity_id, entity_name, 
                  old_value, new_value, description)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7::jsonb, ?8::jsonb, ?9)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, CAST(?7 AS jsonb), CAST(?8 AS jsonb), ?9)
             """)
                     .setParameter(1, userId)
                     .setParameter(2, LocalDateTime.now())
