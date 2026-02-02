@@ -1,5 +1,6 @@
 package de.henzeob.inventory.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -44,9 +45,11 @@ public class Container extends PanacheEntityBase {
     @Column(name = "qr_code", unique = true)
     public String qrCode;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "parentContainer", cascade = CascadeType.REMOVE, orphanRemoval = true)
     public List<Container> childContainers = new ArrayList<>();
 
+    @JsonIgnore
     @OneToMany(mappedBy = "container", cascade = CascadeType.REMOVE, orphanRemoval = true)
     public List<Item> items = new ArrayList<>();
 
@@ -55,6 +58,7 @@ public class Container extends PanacheEntityBase {
     public LocalDateTime lastModified = LocalDateTime.now();
 
     @Version
+    @NotNull
     public Long version;
 
     @NotBlank
