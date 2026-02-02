@@ -1,9 +1,16 @@
 package de.henzeob.inventory.application;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class TaggingService {
@@ -13,7 +20,11 @@ public class TaggingService {
             Map.entry("Technik", List.of(
                     "laptop", "computer", "handy", "smartphone", "tablet", "kabel",
                     "ladegerät", "powerbank", "usb", "akku", "batterie", "kopfhörer",
-                    "headset", "maus", "tastatur", "monitor", "bildschirm", "beamer"
+                    "headset", "maus", "tastatur", "monitor", "bildschirm", "beamer",
+                    "netzteil", "stecker", "cinch", "klinke", "box", "bass", "mischpult",
+                    "speakon", "sattelite", "top", "steckdose", "xlr", "batterien",
+                    "beamer", "drucker", "tv", "fernseher", "fernbedienung", "bluetooth", "jbl",
+                    "funk", "mikro", "walkie", "talkie", "laser"
             )),
             Map.entry("Outdoor", List.of(
                     "zelt", "schlafsack", "isomatte", "rucksack", "wanderschuhe",
@@ -21,9 +32,12 @@ public class TaggingService {
                     "plane", "seil", "karabiner", "campingstuhl", "feldbett", "gaskocher"
             )),
             Map.entry("Basteln", List.of(
-                    "schere", "kleber", "papier", "karton", "farbe", "pinsel",
+                    "schere", "kleber", "papier", "karton", "farb", "pinsel",
                     "stift", "marker", "buntstift", "wolle", "nadel", "faden",
-                    "bastelkleber", "glitzer", "perlen", "knöpfe", "pfeifenreiniger"
+                    "bastelkleber", "glitzer", "perlen", "knöpfe", "pfeifenreiniger",
+                    "anspitzer", "radierer", "radiergummi", "malkasten", "deckweiß",
+                    "creppapier", "edding", "stempel", "klebeband", "stoff", "wolle",
+                    "filz", "krepp", "crepp", "tesa"
             )),
             Map.entry("Spiele", List.of(
                     "ball", "frisbee", "würfel", "karten", "brettspiel", "puzzle",
@@ -33,21 +47,136 @@ public class TaggingService {
             Map.entry("Küche", List.of(
                     "teller", "tasse", "besteck", "gabel", "messer", "löffel",
                     "topf", "pfanne", "schneidebrett", "kelle", "korkenzieher",
-                    "flaschenöffner", "dose", "becher", "thermoskanne", "kühlbox"
+                    "flaschenöffner", "dose", "becher", "thermoskanne", "kühlbox",
+                    "alufolie", "frischhaltefolie", "warmhalte", "schevy", "geschirr", "tuch", "tücher"
             )),
             Map.entry("Erste-Hilfe", List.of(
                     "pflaster", "verband", "schere", "pinzette", "desinfektionsmittel",
                     "salbe", "schmerzmittel", "fieberthermometer", "wundauflage",
-                    "rettungsdecke", "dreiecktuch"
+                    "rettungsdecke", "dreiecktuch", "medikamente"
             )),
             Map.entry("Werkzeug", List.of(
-                    "hammer", "schraubendreher", "schraubenzieher", "zange", "säge",
-                    "bohrmaschine", "akkuschrauber", "wasserwaage", "maßband",
-                    "zollstock", "schraube", "nagel", "dübel", "schraubenschlüssel"
+                    "hammer", "schraubendreher", "schraubenzieher",
+                    "zange", "säge", "bohrmaschine",
+                    "akkuschrauber", "bit", "bitsatz",
+                    "schraube", "nagel", "dübel",
+                    "schraubenschlüssel", "werkzeugkoffer"
             )),
             Map.entry("Sport", List.of(
                     "fußball", "volleyball", "basketball", "seil", "hütchen",
-                    "leibchen", "pfeife", "stoppuhr", "turnmatte", "springschnur"
+                    "leibchen", "pfeife", "stoppuhr", "turnmatte", "springschnur",
+                    "badminton", "ball", "bälle", "feld", "tischtennis", "wikingerschach"
+            )),
+            Map.entry("Bücher", List.of(
+                    "buch", "comic", "ltb", "seil", "lexikon", "chronik", "edition",
+                    "donald", "duck", "isbn", "roman", "heft"
+            )),
+            Map.entry("Putzmittel", List.of(
+                    "reiniger", "putzmittel", "allzweckreiniger", "spülmittel",
+                    "glasreiniger", "badreiniger", "wc-reiniger", "entkalker",
+                    "scheuermilch", "desinfektionsmittel", "bodenreiniger",
+                    "putztuch", "lappen", "schwamm", "bürste", "besen",
+                    "kehrschaufel", "wischmopp", "eimer", "seife"
+            )),
+            Map.entry("Gesellschaftsspiele", List.of(
+                    // generisch
+                    "brettspiel", "kartenspiel", "würfelspiel", "gesellschaftsspiel",
+                    "familienpiel", "partyspiel", "denkspiel", "ratespiel",
+                    "quizspiel", "kooperativ", "strategie", "taktik",
+                    "spielbrett", "spielfiguren", "spielkarten", "würfel",
+                    "spielanleitung", "spielbox", "quiz",
+
+                    // marken / titel
+                    "catan", "monopoly", "risiko", "carcassonne", "siedler",
+                    "scrabble", "mensch ärgere dich nicht", "uno", "phase 10",
+                    "kniffel", "cluedo", "tabu", "activity", "memory",
+                    "skat", "doppelkopf", "rommé", "maumau", "poker", "wizard",
+                    "werwolf", "werwölfe"
+            )),
+            Map.entry("Getränke", List.of(
+                    "wasser", "mineralwasser", "sprudel", "still",
+                    "saft", "apfelsaft", "orangensaft", "multivitaminsaft",
+                    "limo", "limonade", "cola", "eistee",
+                    "tee", "kaffee", "kakao",
+                    "milch", "hafermilch",
+                    "bier", "wein", "sekt",
+                    "energy", "energydrink", "isodrink",
+                    "sirup", "schorle", "punsch"
+            )),
+            Map.entry("KjG", List.of(
+                    "kjg", "katholische junge gemeinde", "kifrei", "kinderfreizeit"
+            )),
+            Map.entry("Luna", List.of(
+                    "luna", "grusel", "puppe"
+            )),
+            Map.entry("Musik", List.of(
+                    "instrument", "gitarre", "e-gitarre", "bass", "ukulele",
+                    "klavier", "keyboard", "schlagzeug", "cajon",
+                    "mikrofon", "verstärker", "lautsprecher", "box",
+                    "kabel", "noten", "notenständer", "metronom"
+            )),
+            Map.entry("Verkleidung", List.of(
+                    "kostüm", "verkleidung", "maske", "perücke",
+                    "hut", "cape", "umhang", "brille",
+                    "schminke", "theatermaske", "accessoire"
+            )),
+            Map.entry("Kleidung", List.of(
+                    "hose", "t-shirt", "shirt", "pullover", "jacke",
+                    "mantel", "kleid", "rock", "socken",
+                    "schuhe", "turnschuhe", "sandalen",
+                    "mütze", "schal", "handschuhe"
+            )),
+            Map.entry("Deko", List.of(
+                    "dekoration", "deko", "girlande", "luftballon",
+                    "kerze", "lichterkette", "plakat", "banner",
+                    "figur", "aufsteller", "tischdeko"
+            )),
+            Map.entry("Bürobedarf", List.of(
+                    "papier", "block", "heft", "ordner",
+                    "stift", "kugelschreiber", "bleistift", "marker",
+                    "textmarker", "radiergummi", "lineal",
+                    "locher", "hefter", "tacker", "klammern"
+            )),
+            Map.entry("Sommer", List.of(
+                    "sonnencreme", "sonnenschutz", "sonnenbrille",
+                    "hut", "kappe", "fächer",
+                    "trinkflasche", "kühlbox",
+                    "picknickdecke", "ventilator"
+            )),
+            Map.entry("Schwimmen/Baden/Wasserschlacht", List.of(
+                    "badehose", "badeanzug", "bikini",
+                    "handtuch", "badetuch",
+                    "schwimmflügel", "schwimmring",
+                    "wasserpistole", "wasserballon",
+                    "taucherbrille", "schnorchel",
+                    "wasserpistole", "wasserbomben",
+                    "pool", "wassereimer", "eimer"
+            )),
+            Map.entry("Strand", List.of(
+                    "strandtuch", "strandmatte", "sonnenschirm",
+                    "strandstuhl", "strandtasche",
+                    "sandspielzeug", "eimer", "schaufel",
+                    "muscheln", "strandball"
+            )),
+            Map.entry("SingStar (Playstation)", List.of(
+                    "singstar", "playstation", "ps2", "ps3", "ps4",
+                    "mikrofon", "usb-mikrofon",
+                    "spiel", "dvd", "konsole"
+            )),
+            Map.entry("Zelten", List.of(
+                    "zelt", "schlafsack", "isomatte",
+                    "luftmatratze", "campingstuhl",
+                    "campingtisch", "lampe", "stirnlampe",
+                    "gaskocher", "kartusche",
+                    "hering", "zeltstange"
+            )),
+            Map.entry("Backen/Kochen", List.of(
+                    "schüssel", "rührschüssel", "löffel",
+                    "schneebesen", "teigschaber",
+                    "backform", "kuchenform",
+                    "messbecher", "waage",
+                    "nudelholz", "backpapier",
+                    "kochtopf", "pfanne"
             ))
     );
 
@@ -98,6 +227,10 @@ public class TaggingService {
 
         // 3. Spezielle Regeln
         tags.addAll(applySpecialRules(fullText));
+
+        if (tags.size() < 3) {
+            tags.addAll(suggestTags(fullText));
+        }
 
         return tags;
     }
@@ -153,7 +286,79 @@ public class TaggingService {
      * Suggest tags based on similar items (für später mit ML)
      */
     public Set<String> suggestTags(String itemName) {
-        // TODO: Implementiere ML-basiertes Tagging
-        return new HashSet<>();
+        try {
+            String apiKey = System.getenv("ANTHROPIC_API_KEY");
+            if (apiKey == null || apiKey.isBlank()) {
+                throw new IllegalStateException("ANTHROPIC_API_KEY not set");
+            }
+
+            ObjectMapper mapper = new ObjectMapper();
+
+            String prompt = """
+                    Gib mir eine kommagetrennte Liste kurzer, allgemeiner Tags
+                    (passend für Kategorien, Gegenstände, Nutzung).
+                    Keine Sätze, keine Erklärungen.
+                    Alles klein geschrieben.
+                    
+                    Gegenstand: "%s"
+                    """.formatted(itemName);
+
+            Map<String, Object> payload = Map.of(
+                    "model", "claude-3-haiku-20240307",
+                    "max_tokens", 100,
+                    "temperature", 0.2,
+                    "messages", List.of(
+                            Map.of(
+                                    "role", "user",
+                                    "content", List.of(
+                                            Map.of(
+                                                    "type", "text",
+                                                    "text", prompt
+                                            )
+                                    )
+                            )
+                    )
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.anthropic.com/v1/messages"))
+                    .header("Content-Type", "application/json")
+                    .header("x-api-key", apiKey)
+                    .header("anthropic-version", "2023-06-01")
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            mapper.writeValueAsString(payload)
+                    ))
+                    .build();
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpResponse<String> response =
+                    client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() != 200) {
+                throw new RuntimeException(
+                        "Anthropic API error: " + response.statusCode() + " " + response.body()
+                );
+            }
+
+            JsonNode root = mapper.readTree(response.body());
+
+            String text = root
+                    .path("content")
+                    .get(0)
+                    .path("text")
+                    .asText("");
+
+            Set<String> tags = Arrays.stream(text.split(","))
+                    .map(String::trim)
+                    .map(String::toLowerCase)
+                    .filter(s -> !s.isBlank())
+                    .collect(Collectors.toSet());
+            return TagNormalizer.normalizeTags(tags);
+
+        } catch (Exception e) {
+            // Fallback: kein ML, keine Tags
+            System.err.println("Tag suggestion failed: " + e.getMessage());
+            return Set.of();
+        }
     }
 }
