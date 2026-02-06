@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class TaggingService {
-    @ConfigProperty(name = "inventory.llm.api-key")
+    @ConfigProperty(name = "inventory.llm.api-key", defaultValue = "")
     String anthropicApiKey;
 
     @ConfigProperty(name = "inventory.llm.tagging")
