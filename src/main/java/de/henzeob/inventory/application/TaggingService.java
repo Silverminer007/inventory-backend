@@ -3,6 +3,7 @@ package de.henzeob.inventory.application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.config.ConfigValue;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.net.URI;
@@ -16,7 +17,7 @@ import java.util.stream.Collectors;
 @ApplicationScoped
 public class TaggingService {
     @ConfigProperty(name = "inventory.llm.api-key", defaultValue = "")
-    String anthropicApiKey;
+    ConfigValue anthropicApiKey;
 
     @ConfigProperty(name = "inventory.llm.tagging")
     Boolean useLLMTagging;
@@ -296,7 +297,9 @@ public class TaggingService {
             if (useLLMTagging == null || !useLLMTagging) {
                 return new HashSet<>();
             }
-            if (this.anthropicApiKey == null || this.anthropicApiKey.isBlank()) {
+            if (this.anthropicApiKey == null
+                    || this.anthropicApiKey.getValue() == null
+                    || this.anthropicApiKey.getValue().isBlank()) {
                 throw new IllegalStateException("ANTHROPIC_API_KEY not set");
             }
 
@@ -331,7 +334,7 @@ public class TaggingService {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("https://api.anthropic.com/v1/messages"))
                     .header("Content-Type", "application/json")
-                    .header("x-api-key", this.anthropicApiKey)
+                    .header("x-api-key", this.anthropicApiKey.getValue())
                     .header("anthropic-version", "2023-06-01")
                     .POST(HttpRequest.BodyPublishers.ofString(
                             mapper.writeValueAsString(payload)
