@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -31,6 +32,12 @@ public class ItemService {
 
     @Inject
     ContainerService containerService;
+
+    @Inject
+    SynonymService synonymService;
+
+    @Inject
+    SynonymGenerationService synonymGenerationService;
 
     /**
      * Get all items for a user
@@ -75,6 +82,9 @@ public class ItemService {
 
         // Audit log
         auditLogService.logCreate(userId, "ITEM", item.id, item.name, item);
+
+        // Auto-generate synonyms
+        synonymGenerationService.generateSynonyms(item.name, userId);
 
         return itemMapper.toDTO(item);
     }
@@ -137,20 +147,27 @@ public class ItemService {
     }
 
     /**
-     * Search items
+     * Search items with synonym expansion
      */
     public List<ItemDTO> searchItems(String query, String userId) {
-        // Kombinierte Suche: Exact -> Fuzzy -> Tags
-        List<Item> results = itemRepository.searchByName(query, userId);
+        Set<String> searchTerms = synonymService.expandSearchTerms(query, userId);
 
-        // Wenn zu wenig Ergebnisse, füge Fuzzy-Search hinzu
-        if (results.size() < 5) {
-            List<Item> fuzzyResults = itemRepository.fuzzySearch(query, userId, 0.3);
+        List<Item> results = new ArrayList<>();
 
-            // Deduplizieren
-            fuzzyResults.stream()
+        for (String term : searchTerms) {
+            // Exact / LIKE search
+            List<Item> exactResults = itemRepository.searchByName(term, userId);
+            exactResults.stream()
                     .filter(item -> results.stream().noneMatch(r -> r.id.equals(item.id)))
                     .forEach(results::add);
+
+            // Fuzzy search if still few results
+            if (results.size() < 5) {
+                List<Item> fuzzyResults = itemRepository.fuzzySearch(term, userId, 0.3);
+                fuzzyResults.stream()
+                        .filter(item -> results.stream().noneMatch(r -> r.id.equals(item.id)))
+                        .forEach(results::add);
+            }
         }
 
         return results.stream()

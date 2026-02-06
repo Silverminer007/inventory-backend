@@ -90,7 +90,7 @@ CREATE TABLE items (
 
 CREATE TABLE item_tags (
                            item_id BIGINT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
-                           tag VARCHAR(100) NOT NULL,
+                           tag VARCHAR(255) NOT NULL,
                            PRIMARY KEY (item_id, tag)
 );
 

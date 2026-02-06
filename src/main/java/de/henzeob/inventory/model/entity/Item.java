@@ -45,6 +45,7 @@ public class Item extends PanacheEntityBase {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "item_tags", joinColumns = @JoinColumn(name = "item_id"))
     @Column(name = "tag")
+    @NotNull
     public Set<String> tags = new HashSet<>();
 
     @NotNull

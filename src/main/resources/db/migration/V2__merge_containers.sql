@@ -8,9 +8,9 @@ CREATE TABLE containers (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    container_type VARCHAR(50) NOT NULL,  -- ROOM, SHELF, BOX
+    container_type VARCHAR(255) NOT NULL,  -- ROOM, SHELF, BOX
     parent_container_id BIGINT REFERENCES containers(id) ON DELETE CASCADE,
-    location_type VARCHAR(50),  -- PERMANENT, TEMPORARY (only for ROOMs)
+    location_type VARCHAR(255),  -- PERMANENT, TEMPORARY (only for ROOMs)
     location VARCHAR(255),      -- e.g. 'Keller', 'Ferienfreizeit 2025' (only for ROOMs)
     position VARCHAR(255),
     qr_code VARCHAR(255) UNIQUE,

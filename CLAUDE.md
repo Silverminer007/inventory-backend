@@ -2,16 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Requirements
-
-All changes must comply with `requirements.md`. Before implementing or modifying features, check that:
-- Non-functional requirements are met (performance targets NF1-NF3, security NF72-NF79, data integrity NF30/NF86-NF89)
-- The change does not violate any existing functional requirement (F1-F108)
-- Optimistic locking is preserved for concurrent access (NF87)
-- SQL injection protection is maintained — use Panache queries, never raw string concatenation (NF76)
-- Transactional integrity is ensured for move operations (NF15)
-- All data access is scoped by `userId` for multi-tenant isolation
-
 ## Build & Development Commands
 
 ```bash
