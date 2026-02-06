@@ -16,6 +16,16 @@ public class ContainerRepository implements PanacheRepository<Container> {
         return list("userId", Sort.by("name"), userId);
     }
 
+    public List<Container> searchByNameOrDescription(String query, ContainerType type, String userId) {
+        String likeQuery = "%" + query + "%";
+        if (type != null) {
+            return list("(LOWER(name) LIKE LOWER(?1) or LOWER(description) LIKE LOWER(?1)) and containerType = ?2 and userId = ?3",
+                    Sort.by("name"), likeQuery, type, userId);
+        }
+        return list("(LOWER(name) LIKE LOWER(?1) or LOWER(description) LIKE LOWER(?1)) and userId = ?2",
+                Sort.by("name"), likeQuery, userId);
+    }
+
     public Optional<Container> findByIdAndUser(Long id, String userId) {
         return find("id = ?1 and userId = ?2", id, userId).firstResultOptional();
     }

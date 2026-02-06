@@ -32,12 +32,17 @@ public class ContainerResource {
     }
 
     @GET
-    @Operation(summary = "Get all containers", description = "Returns all containers for the current user, optionally filtered by type")
+    @Operation(summary = "Get all containers", description = "Returns all containers for the current user, optionally filtered by type or search query")
     public Response getAllContainers(
-            @Parameter(description = "Filter by container type (ROOM, SHELF, BOX)") @QueryParam("type") String type
+            @Parameter(description = "Filter by container type (ROOM, SHELF, BOX)") @QueryParam("type") String type,
+            @Parameter(description = "Search by name or description") @QueryParam("q") String query
     ) {
         List<ContainerDTO> containers;
-        if (type != null && !type.isBlank()) {
+        if (query != null && !query.isBlank()) {
+            containers = containerService.searchContainers(query,
+                    type != null && !type.isBlank() ? de.henzeob.inventory.model.entity.ContainerType.valueOf(type) : null,
+                    getCurrentUserId());
+        } else if (type != null && !type.isBlank()) {
             containers = containerService.getContainersByType(type, getCurrentUserId());
         } else {
             containers = containerService.getAllContainers(getCurrentUserId());

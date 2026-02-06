@@ -86,6 +86,13 @@ public class ContainerService {
                 .collect(Collectors.toList());
     }
 
+    public List<ContainerDTO> searchContainers(String query, ContainerType type, String userId) {
+        return containerRepository.searchByNameOrDescription(query, type, userId)
+                .stream()
+                .map(containerMapper::toDTO)
+                .collect(Collectors.toList());
+    }
+
     public ContainerDTO getContainerDTO(Long id, String userId) {
         Container container = getContainer(id, userId);
         return containerMapper.toDTOWithChildren(container);
