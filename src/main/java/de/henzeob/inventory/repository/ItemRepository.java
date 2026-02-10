@@ -109,6 +109,23 @@ public class ItemRepository implements PanacheRepository<Item> {
     }
 
     /**
+     * Find all distinct tags used by a user's items
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> findDistinctTagsByUser(String userId) {
+        return getEntityManager()
+                .createNativeQuery("""
+                    SELECT DISTINCT t.tag
+                    FROM item_tags t
+                    JOIN items i ON t.item_id = i.id
+                    WHERE i.user_id = :userId
+                    ORDER BY t.tag
+                """)
+                .setParameter("userId", userId)
+                .getResultList();
+    }
+
+    /**
      * Count items by user
      */
     public long countByUser(String userId) {

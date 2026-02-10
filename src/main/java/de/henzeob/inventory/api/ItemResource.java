@@ -87,6 +87,16 @@ public class ItemResource {
     }
 
     @GET
+    @Path("/tags")
+    @Operation(summary = "Get distinct tags", description = "Returns all distinct tags for the current user, optionally filtered by prefix")
+    public Response getDistinctTags(
+            @QueryParam("q") @DefaultValue("") String prefix
+    ) {
+        List<String> tags = itemService.getDistinctTags(getCurrentUserId(), prefix);
+        return Response.ok(tags).build();
+    }
+
+    @GET
     @Path("/search")
     @Operation(summary = "Search items by name")
     public Response searchItems(

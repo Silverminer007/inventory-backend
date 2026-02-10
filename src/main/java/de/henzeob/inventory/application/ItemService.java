@@ -185,6 +185,20 @@ public class ItemService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Get all distinct tags for a user, optionally filtered by prefix
+     */
+    public List<String> getDistinctTags(String userId, String prefix) {
+        List<String> tags = itemRepository.findDistinctTagsByUser(userId);
+        if (prefix != null && !prefix.isBlank()) {
+            String lowerPrefix = prefix.toLowerCase();
+            tags = tags.stream()
+                    .filter(tag -> tag.toLowerCase().startsWith(lowerPrefix))
+                    .collect(Collectors.toList());
+        }
+        return tags;
+    }
+
     // Helper methods
     private void setLocation(Item item, Long containerId, String userId) {
         if (containerId == null) {
