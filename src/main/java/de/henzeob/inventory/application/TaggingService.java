@@ -2,7 +2,10 @@ package de.henzeob.inventory.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.henzeob.inventory.model.entity.TagSuggestionCache;
+import de.henzeob.inventory.repository.TagSuggestionCacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.ConfigValue;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -21,6 +24,9 @@ public class TaggingService {
 
     @ConfigProperty(name = "inventory.llm.tagging")
     Boolean useLLMTagging;
+
+    @Inject
+    TagSuggestionCacheRepository tagSuggestionCacheRepository;
 
     // Rule-based Tagging mit Keywords
     private static final Map<String, List<String>> KEYWORD_RULES = Map.ofEntries(
@@ -297,6 +303,13 @@ public class TaggingService {
             if (useLLMTagging == null || !useLLMTagging) {
                 return new HashSet<>();
             }
+
+            // Check cache first
+            Optional<TagSuggestionCache> cached = tagSuggestionCacheRepository.findByInputText(itemName);
+            if (cached.isPresent()) {
+                return new HashSet<>(cached.get().suggestedTags);
+            }
+
             if (this.anthropicApiKey == null
                     || this.anthropicApiKey.getValue() == null
                     || this.anthropicApiKey.getValue().isBlank()) {
@@ -307,10 +320,11 @@ public class TaggingService {
 
             String prompt = """
                     Gib mir eine kommagetrennte Liste kurzer, allgemeiner Tags
-                    (passend für Kategorien, Gegenstände, Nutzung).
+                    (passend für Kategorien, Gegenstände).
                     Keine Sätze, keine Erklärungen.
                     Alles klein geschrieben.
-                    
+                    Maximal 3 Tags
+
                     Gegenstand: "%s"
                     """.formatted(itemName);
 
@@ -364,7 +378,15 @@ public class TaggingService {
                     .map(String::toLowerCase)
                     .filter(s -> !s.isBlank())
                     .collect(Collectors.toSet());
-            return TagNormalizer.normalizeTags(tags);
+            Set<String> normalizedTags = TagNormalizer.normalizeTags(tags);
+
+            // Store in cache
+            TagSuggestionCache cacheEntry = new TagSuggestionCache();
+            cacheEntry.inputText = itemName;
+            cacheEntry.suggestedTags = normalizedTags;
+            tagSuggestionCacheRepository.persist(cacheEntry);
+
+            return normalizedTags;
 
         } catch (Exception e) {
             // Fallback: kein ML, keine Tags
