@@ -19,6 +19,7 @@
         <quarkus.s3.version>3.14.1</quarkus.s3.version>
         <skipITs>true</skipITs>
         <surefire-plugin.version>3.0.0</surefire-plugin.version>
+        <lombok.version>1.18.42</lombok.version>
     </properties>
 
     <dependencyManagement>
@@ -41,6 +42,12 @@
     </dependencyManagement>
 
     <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <!-- Quarkus Core -->
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -146,6 +153,13 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${compiler-plugin.version}</version>
                 <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
                     <compilerArgs>
                         <arg>-parameters</arg>
                     </compilerArgs>
@@ -172,7 +186,8 @@
                         </goals>
                         <configuration>
                             <systemPropertyVariables>
-                                <native.image.path>${project.build.directory}/${project.build.finalName}-runner</native.image.path>
+                                <native.image.path>${project.build.directory}/${project.build.finalName}-runner
+                                </native.image.path>
                                 <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                                 <maven.home>${maven.home}</maven.home>
                             </systemPropertyVariables>

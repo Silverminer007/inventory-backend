@@ -2,6 +2,7 @@ package de.henzeob.inventory.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.henzeob.inventory.model.entity.ItemTag;
 import de.henzeob.inventory.model.entity.TagSuggestionCache;
 import de.henzeob.inventory.repository.TagSuggestionCacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -204,8 +205,8 @@ public class TaggingService {
     /**
      * Generate tags for an item based on name and description
      */
-    public Set<String> generateTags(String itemName, String description) {
-        Set<String> tags = new HashSet<>();
+    public Set<ItemTag> generateTags(String itemName, String description) {
+        Set<ItemTag> tags = new HashSet<>();
 
         String fullText = (itemName + " " + (description != null ? description : ""))
                 .toLowerCase()
@@ -222,7 +223,10 @@ public class TaggingService {
 
             for (String keyword : keywords) {
                 if (fullText.contains(keyword.toLowerCase())) {
-                    tags.add(tag);
+                    ItemTag itemTag = new ItemTag();
+                    itemTag.setTag(tag);
+                    itemTag.setTagType(ItemTag.TagType.RULES);
+                    tags.add(itemTag);
                     break; // Nur einmal pro Tag
                 }
             }
@@ -234,7 +238,10 @@ public class TaggingService {
             Pattern pattern = entry.getValue();
 
             if (pattern.matcher(fullText).find()) {
-                tags.add(tag);
+                ItemTag itemTag = new ItemTag();
+                itemTag.setTag(tag);
+                itemTag.setTagType(ItemTag.TagType.RULES);
+                tags.add(itemTag);
             }
         }
 
@@ -251,7 +258,7 @@ public class TaggingService {
     /**
      * Spezielle Tagging-Regeln
      */
-    private Set<String> applySpecialRules(String text) {
+    private Set<ItemTag> applySpecialRules(String text) {
         Set<String> tags = new HashSet<>();
 
         // Größen
@@ -292,13 +299,18 @@ public class TaggingService {
             tags.add("Menge");
         }
 
-        return tags;
+        return tags.stream().map(tag ->  {
+            ItemTag itemTag = new ItemTag();
+            itemTag.setTag(tag);
+            itemTag.setTagType(ItemTag.TagType.RULES);
+            return itemTag;
+        }).collect(Collectors.toSet());
     }
 
     /**
      * Suggest tags based on similar items (für später mit ML)
      */
-    public Set<String> suggestTags(String itemName) {
+    public Set<ItemTag> suggestTags(String itemName) {
         try {
             if (useLLMTagging == null || !useLLMTagging) {
                 return new HashSet<>();
@@ -307,7 +319,12 @@ public class TaggingService {
             // Check cache first
             Optional<TagSuggestionCache> cached = tagSuggestionCacheRepository.findByInputText(itemName);
             if (cached.isPresent()) {
-                return new HashSet<>(cached.get().suggestedTags);
+                return cached.get().suggestedTags.stream().map(tag ->  {
+                    ItemTag itemTag = new ItemTag();
+                    itemTag.setTag(tag);
+                    itemTag.setTagType(ItemTag.TagType.LLM);
+                    return itemTag;
+                }).collect(Collectors.toSet());
             }
 
             if (this.anthropicApiKey == null
@@ -386,7 +403,12 @@ public class TaggingService {
             cacheEntry.suggestedTags = normalizedTags;
             tagSuggestionCacheRepository.persist(cacheEntry);
 
-            return normalizedTags;
+            return normalizedTags.stream().map(tag ->  {
+                ItemTag itemTag = new ItemTag();
+                itemTag.setTag(tag);
+                itemTag.setTagType(ItemTag.TagType.LLM);
+                return itemTag;
+            }).collect(Collectors.toSet());
 
         } catch (Exception e) {
             // Fallback: kein ML, keine Tags

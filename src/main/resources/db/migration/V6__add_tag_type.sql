@@ -1,0 +1,7 @@
+ALTER TABLE item_tags ADD COLUMN tag_type VARCHAR(255);
+UPDATE item_tags SET tag_type = 'LLM';
+ALTER TABLE item_tags ADD UNIQUE (item_id, tag);
+
+ALTER TABLE if EXISTS item_tags ADD COLUMN id BIGINT NOT NULL;
+
+CREATE SEQUENCE item_tags_SEQ START WITH 1 INCREMENT BY 50;

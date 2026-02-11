@@ -2,7 +2,10 @@ package de.henzeob.inventory.mapper;
 
 import de.henzeob.inventory.model.dto.ItemDTO;
 import de.henzeob.inventory.model.entity.Item;
+import de.henzeob.inventory.model.entity.ItemTag;
 import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class ItemMapper {
@@ -21,7 +24,7 @@ public class ItemMapper {
         dto.quantity = item.quantity;
         dto.barcode = item.barcode;
         dto.qrCode = item.qrCode;
-        dto.tags = item.tags;
+        dto.tags = item.tags.stream().map(ItemTag::getTag).collect(Collectors.toSet());
 
         dto.lastModified = item.lastModified;
         dto.version = item.version;
@@ -57,10 +60,5 @@ public class ItemMapper {
         item.position = dto.position;
         item.quantity = dto.quantity != null ? dto.quantity : 1;
         item.barcode = dto.barcode;
-
-        if (dto.tags != null) {
-            item.tags.clear();
-            item.tags.addAll(dto.tags);
-        }
     }
 }

@@ -64,6 +64,8 @@ public class ContainerMapper {
         if (container.containerType == ContainerType.ROOM) {
             if (dto.locationType != null) {
                 container.locationType = Container.LocationType.valueOf(dto.locationType);
+            } else {
+                container.locationType = null;
             }
             container.location = dto.location;
         }

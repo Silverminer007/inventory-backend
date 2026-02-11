@@ -42,11 +42,9 @@ public class Item extends PanacheEntityBase {
     @Column(name = "qr_code", unique = true)
     public String qrCode;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "item_tags", joinColumns = @JoinColumn(name = "item_id"))
-    @Column(name = "tag")
     @NotNull
-    public Set<String> tags = new HashSet<>();
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "item")
+    public Set<ItemTag> tags = new HashSet<>();
 
     @NotNull
     @Column(name = "last_modified", nullable = false)

@@ -4,6 +4,7 @@ import de.henzeob.inventory.model.dto.ItemDTO;
 import de.henzeob.inventory.model.entity.Container;
 import de.henzeob.inventory.model.entity.Item;
 import de.henzeob.inventory.mapper.ItemMapper;
+import de.henzeob.inventory.model.entity.ItemTag;
 import de.henzeob.inventory.repository.ItemRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -12,6 +13,7 @@ import jakarta.ws.rs.NotFoundException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -72,13 +74,17 @@ public class ItemService {
         // Set location
         setLocation(item, dto.containerId, userId);
 
+        itemRepository.persist(item);
+
         // Auto-tagging
         if (dto.tags == null || dto.tags.isEmpty()) {
-            Set<String> autoTags = taggingService.generateTags(dto.name, dto.description);
+            Set<ItemTag> autoTags = taggingService.generateTags(dto.name, dto.description);
+            for(ItemTag tag : autoTags) {
+                tag.setItem(item);
+                tag.persist();
+            }
             item.tags.addAll(autoTags);
         }
-
-        itemRepository.persist(item);
 
         // Audit log
         auditLogService.logCreate(userId, "ITEM", item.id, item.name, item);
@@ -101,6 +107,28 @@ public class ItemService {
         Object oldValues = captureItemState(item);
 
         itemMapper.updateEntity(item, dto);
+
+        List<ItemTag> oldItemTags = ItemTag.find("item.id = ?1", dto.id).list();
+
+        List<String> newTags = dto.tags.stream().filter(tag ->
+                oldItemTags.stream().noneMatch(t -> t.getTag().equals(tag))
+        ).toList();
+
+        List<ItemTag> deletedItemTags = oldItemTags.stream().filter(t ->
+                !dto.tags.contains(t.getTag())
+        ).toList();
+
+        for (String tag : newTags) {
+            ItemTag newTag = new ItemTag();
+            newTag.setTag(tag);
+            newTag.setItem(item);
+            newTag.setTagType(ItemTag.TagType.USER);
+            newTag.persist();
+        }
+
+        for (ItemTag tag : deletedItemTags) {
+            tag.delete();
+        }
 
         itemRepository.persist(item);
 
