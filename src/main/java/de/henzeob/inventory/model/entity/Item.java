@@ -5,11 +5,16 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexedEmbedded;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.KeywordField;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
+@Indexed
 @Entity
 @Table(name = "items")
 public class Item extends PanacheEntityBase {
@@ -20,14 +25,17 @@ public class Item extends PanacheEntityBase {
 
     @NotBlank
     @Column(nullable = false)
+    @FullTextField(analyzer = "german")
     public String name;
 
     @Column(columnDefinition = "TEXT")
+    @FullTextField(analyzer = "german")
     public String description;
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "container_id", nullable = false)
+    @IndexedEmbedded(includeDepth = 1)
     public Container container;
 
     public String position;
@@ -44,6 +52,7 @@ public class Item extends PanacheEntityBase {
 
     @NotNull
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "item")
+    @IndexedEmbedded
     public Set<ItemTag> tags = new HashSet<>();
 
     @NotNull
@@ -55,6 +64,7 @@ public class Item extends PanacheEntityBase {
 
     @NotBlank
     @Column(name = "user_id", nullable = false)
+    @KeywordField
     public String userId;
 
     @Column(name = "created_at", nullable = false, updatable = false)

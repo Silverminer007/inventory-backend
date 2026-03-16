@@ -1,7 +1,9 @@
 package de.henzeob.inventory.api;
 
+import de.henzeob.inventory.application.TaggingService;
 import de.henzeob.inventory.model.dto.ItemDTO;
 import de.henzeob.inventory.application.ItemService;
+import de.henzeob.inventory.model.entity.ItemTag;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -12,6 +14,7 @@ import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 import java.util.List;
+import java.util.Set;
 
 @Path("/api/v1/items")
 @Produces(MediaType.APPLICATION_JSON)
@@ -21,6 +24,8 @@ public class ItemResource {
 
     @Inject
     ItemService itemService;
+    @Inject
+    TaggingService taggingService;
 
     // TODO: Später mit Keycloak Security Context ersetzen
     // Für MVP: Hardcoded User
@@ -97,12 +102,20 @@ public class ItemResource {
     }
 
     @GET
+    @Path("/tags/suggest")
+    public Response suggestTags(@QueryParam("item") String item) {
+        Set<String> tags = this.taggingService.suggestTags(item);
+        return Response.ok(tags).build();
+    }
+
+    @GET
     @Path("/search")
     @Operation(summary = "Search items by name")
     public Response searchItems(
-            @QueryParam("q") @DefaultValue("") String query
+            @QueryParam("q") @DefaultValue("") String query,
+            @QueryParam("tags") List<String> tags
     ) {
-        List<ItemDTO> results = itemService.searchItems(query, getCurrentUserId());
+        List<ItemDTO> results = itemService.searchItems(query, tags, getCurrentUserId());
         return Response.ok(results).build();
     }
 
