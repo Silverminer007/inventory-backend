@@ -84,6 +84,15 @@ public class ItemService {
                 tag.persist();
             }
             item.tags.addAll(autoTags);
+        } else {
+            for (String tagStr : dto.tags) {
+                ItemTag tag = new ItemTag();
+                tag.setTag(tagStr);
+                tag.setItem(item);
+                tag.setTagType(ItemTag.TagType.USER);
+                tag.persist();
+                item.tags.add(tag);
+            }
         }
 
         // Auto-generate synonyms
