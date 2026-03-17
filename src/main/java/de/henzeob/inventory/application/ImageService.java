@@ -135,9 +135,10 @@ public class ImageService {
     }
 
     @Transactional
-    public ImageDTO linkImageFromS3Key(String s3Key, String filename, String contentType, Long fileSize,
+    public ImageDTO linkImageFromS3Key(UUID id, String s3Key, String filename, String contentType, Long fileSize,
                                        boolean isPrimary, UUID itemId, UUID containerId, String userId) {
         Image image = new Image();
+        if (id != null) image.id = id;
         image.s3Key = s3Key;
         image.s3Url = getS3Url(s3Key);
         image.filename = filename;

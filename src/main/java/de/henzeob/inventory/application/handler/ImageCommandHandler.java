@@ -27,6 +27,7 @@ public class ImageCommandHandler {
     }
 
     private ImageDTO handleUpload(Map<String, Object> p, String userId) {
+        UUID id = toUUID(p.get("id"));
         String s3Key = required(p, "s3Key");
         String filename = (String) p.get("filename");
         String contentType = (String) p.get("contentType");
@@ -34,7 +35,7 @@ public class ImageCommandHandler {
         boolean isPrimary = p.get("isPrimary") instanceof Boolean b ? b : Boolean.parseBoolean(String.valueOf(p.get("isPrimary")));
         UUID itemId = toUUID(p.get("itemId"));
         UUID containerId = toUUID(p.get("containerId"));
-        return imageService.linkImageFromS3Key(s3Key, filename, contentType, fileSize, isPrimary, itemId, containerId, userId);
+        return imageService.linkImageFromS3Key(id, s3Key, filename, contentType, fileSize, isPrimary, itemId, containerId, userId);
     }
 
     private void handleDelete(UUID entityId, String userId) {

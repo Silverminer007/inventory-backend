@@ -27,9 +27,16 @@ public class SynonymCommandHandler {
 
     private SynonymDTO handleCreate(Map<String, Object> p, String userId) {
         SynonymDTO dto = new SynonymDTO();
+        dto.id = toUUID(p.get("id"));
         dto.canonicalTerm = required(p, "canonicalTerm");
         dto.synonym = required(p, "synonym");
         return synonymService.createSynonym(dto, userId);
+    }
+
+    private UUID toUUID(Object val) {
+        if (val == null) return null;
+        if (val instanceof UUID u) return u;
+        return UUID.fromString(val.toString());
     }
 
     private void handleDelete(UUID entityId, String userId) {

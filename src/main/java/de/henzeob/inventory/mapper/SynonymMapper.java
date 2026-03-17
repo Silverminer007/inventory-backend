@@ -21,6 +21,7 @@ public class SynonymMapper {
         if (dto == null) return null;
 
         Synonym entity = new Synonym();
+        if (dto.id != null) entity.id = dto.id;
         entity.canonicalTerm = dto.canonicalTerm;
         entity.synonym = dto.synonym;
         entity.userId = userId;
