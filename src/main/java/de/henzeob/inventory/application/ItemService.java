@@ -34,9 +34,6 @@ public class ItemService {
     TaggingService taggingService;
 
     @Inject
-    AuditLogService auditLogService;
-
-    @Inject
     ContainerService containerService;
 
     @Inject
@@ -89,9 +86,6 @@ public class ItemService {
             item.tags.addAll(autoTags);
         }
 
-        // Audit log
-        auditLogService.logCreate(userId, "ITEM", item.id, item.name, item);
-
         // Auto-generate synonyms
         synonymGenerationService.generateSynonyms(item.name, userId);
 
@@ -104,9 +98,6 @@ public class ItemService {
     @Transactional
     public ItemDTO updateItem(Long id, ItemDTO dto, String userId) {
         Item item = itemRepository.findByIdAndUser(id, userId).orElseThrow(() -> new NotFoundException("Item nicht gefunden"));
-
-        // Store old values for audit
-        Object oldValues = captureItemState(item);
 
         itemMapper.updateEntity(item, dto);
 
@@ -130,9 +121,6 @@ public class ItemService {
 
         itemRepository.persist(item);
 
-        // Audit log
-        auditLogService.logUpdate(userId, "ITEM", item.id, item.name, oldValues, item);
-
         return itemMapper.toDTO(item);
     }
 
@@ -143,16 +131,10 @@ public class ItemService {
     public ItemDTO moveItem(Long id, String userId, Long containerId) {
         Item item = itemRepository.findByIdAndUser(id, userId).orElseThrow(() -> new NotFoundException("Item nicht gefunden"));
 
-        String oldLocation = item.getLocationPath();
-
         Container container = containerService.getContainer(containerId, userId);
         item.container = container;
 
         itemRepository.persist(item);
-
-        // Audit log
-        String newLocation = item.getLocationPath();
-        auditLogService.logMove(userId, "ITEM", item.id, item.name, oldLocation, newLocation);
 
         return itemMapper.toDTO(item);
     }
@@ -163,9 +145,6 @@ public class ItemService {
     @Transactional
     public void deleteItem(Long id, String userId) {
         Item item = itemRepository.findByIdAndUser(id, userId).orElseThrow(() -> new NotFoundException("Item nicht gefunden"));
-
-        // Audit log
-        auditLogService.logDelete(userId, "ITEM", item.id, item.name, item);
 
         itemRepository.delete(item);
     }
@@ -245,13 +224,4 @@ public class ItemService {
         item.container = container;
     }
 
-    private Object captureItemState(Item item) {
-        // Für Audit Log - vereinfacht
-        return new Object() {
-            public String name = item.name;
-            public String description = item.description;
-            public Integer quantity = item.quantity;
-            public String location = item.getLocationPath();
-        };
-    }
 }

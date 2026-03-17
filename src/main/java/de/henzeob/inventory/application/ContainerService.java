@@ -22,9 +22,6 @@ public class ContainerService {
     @Inject
     ContainerMapper containerMapper;
 
-    @Inject
-    AuditLogService auditLogService;
-
     /**
      * Find container by ID for a user, or throw NotFoundException.
      */
@@ -49,7 +46,6 @@ public class ContainerService {
         }
 
         containerRepository.persist(container);
-        auditLogService.logCreate(userId, "CONTAINER", container.id, container.name, container);
 
         return container;
     }
@@ -60,7 +56,6 @@ public class ContainerService {
     @Transactional
     public Container moveContainer(Long containerId, Long newParentId, String userId) {
         Container container = getContainer(containerId, userId);
-        String oldLocation = container.getFullPath();
 
         if (container.containerType == ContainerType.ROOM) {
             throw new IllegalArgumentException("Räume können nicht verschoben werden");
@@ -72,9 +67,6 @@ public class ContainerService {
 
         container.parentContainer = newParent;
         containerRepository.persist(container);
-
-        String newLocation = container.getFullPath();
-        auditLogService.logMove(userId, "CONTAINER", container.id, container.name, oldLocation, newLocation);
 
         return container;
     }
@@ -125,13 +117,9 @@ public class ContainerService {
     public ContainerDTO updateContainer(Long id, ContainerDTO dto, String userId) {
         Container container = getContainer(id, userId);
 
-        Object oldValues = captureContainerState(container);
-
         containerMapper.updateEntity(container, dto);
 
         containerRepository.persist(container);
-
-        auditLogService.logUpdate(userId, "CONTAINER", container.id, container.name, oldValues, container);
 
         return containerMapper.toDTO(container);
     }
@@ -147,18 +135,7 @@ public class ContainerService {
             throw new IllegalArgumentException("Container kann nicht gelöscht werden: enthält Gegenstände");
         }
 
-        auditLogService.logDelete(userId, "CONTAINER", container.id, container.name, container);
-
         containerRepository.delete(container);
-    }
-
-    private Object captureContainerState(Container container) {
-        return new Object() {
-            public String name = container.name;
-            public String description = container.description;
-            public String position = container.position;
-            public String location = container.location;
-        };
     }
 
     private void validateParentChild(ContainerType childType, Container parent) {
