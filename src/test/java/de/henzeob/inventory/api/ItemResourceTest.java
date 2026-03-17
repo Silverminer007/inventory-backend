@@ -5,7 +5,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
+import java.util.UUID;
+
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
@@ -21,20 +24,25 @@ public class ItemResourceTest {
 
     @BeforeAll
     void setupContainer() {
-        String containerBody = """
-            {
-                "name": "Testraum",
-                "containerType": "ROOM"
-            }
-        """;
+        String command = """
+            [{
+                "commandId": "%s",
+                "commandType": "CONTAINER_CREATE",
+                "payload": {
+                    "name": "Testraum",
+                    "containerType": "ROOM"
+                }
+            }]
+        """.formatted(UUID.randomUUID());
 
         containerId = given()
                 .contentType("application/json")
-                .body(containerBody)
-                .when().post("/api/v1/containers")
+                .body(command)
+                .when().post("/commands")
                 .then()
-                .statusCode(201)
-                .extract().jsonPath().getLong("id");
+                .statusCode(200)
+                .body("[0].status", is("APPLIED"))
+                .extract().jsonPath().getLong("[0].entityId");
     }
 
     @Test
@@ -47,24 +55,27 @@ public class ItemResourceTest {
     }
 
     @Test
-    public void testCreateItem() {
-        String requestBody = """
-            {
-                "name": "Test Laptop",
-                "description": "Ein Test-Laptop",
-                "containerId": null,
-                "quantity": 1
-            }
-        """;
+    public void testCreateItemMissingContainerId() {
+        String command = """
+            [{
+                "commandId": "%s",
+                "commandType": "ITEM_CREATE",
+                "payload": {
+                    "name": "Test Laptop",
+                    "description": "Ein Test-Laptop",
+                    "quantity": 1
+                }
+            }]
+        """.formatted(UUID.randomUUID());
 
-        // Note: This will fail because containerId is required
-        // TODO: Setup test data first
+        // containerId is required — command should FAIL
         given()
                 .contentType("application/json")
-                .body(requestBody)
-                .when().post("/api/v1/items")
+                .body(command)
+                .when().post("/commands")
                 .then()
-                .statusCode(400); // Expect validation error
+                .statusCode(200)
+                .body("[0].status", is("FAILED"));
     }
 
     @Test
@@ -80,83 +91,110 @@ public class ItemResourceTest {
     @Test
     public void testCreateItemAutoTaggingAtLeastTwoTags() {
         // "roter Laptop" triggers: "Technik" (keyword "laptop") + "Farbe: Rot" (special rule "rot")
-        String requestBody = """
-            {
-                "name": "Roter Laptop",
-                "description": "Ein roter Laptop",
-                "containerId": %d,
-                "quantity": 1
-            }
-        """.formatted(containerId);
+        String command = """
+            [{
+                "commandId": "%s",
+                "commandType": "ITEM_CREATE",
+                "payload": {
+                    "name": "Roter Laptop",
+                    "description": "Ein roter Laptop",
+                    "containerId": %d,
+                    "quantity": 1
+                }
+            }]
+        """.formatted(UUID.randomUUID(), containerId);
 
         given()
                 .contentType("application/json")
-                .body(requestBody)
-                .when().post("/api/v1/items")
+                .body(command)
+                .when().post("/commands")
                 .then()
-                .statusCode(201)
-                .body("tags", hasSize(greaterThanOrEqualTo(2)));
+                .statusCode(200)
+                .body("[0].status", is("APPLIED"))
+                .body("[0].snapshot.tags", hasSize(greaterThanOrEqualTo(2)));
     }
 
     @Test
     public void testCreateItemAutoTaggingExactlyThreeTags() {
         // "kleiner roter Laptop" triggers:
         //   "Technik" (keyword "laptop") + "Klein" (special rule "klein") + "Farbe: Rot" (special rule "rot")
-        String requestBody = """
-            {
-                "name": "Kleiner roter Laptop",
-                "description": "Ein kleiner roter Laptop",
-                "containerId": %d,
-                "quantity": 1
-            }
-        """.formatted(containerId);
+        String command = """
+            [{
+                "commandId": "%s",
+                "commandType": "ITEM_CREATE",
+                "payload": {
+                    "name": "Kleiner roter Laptop",
+                    "description": "Ein kleiner roter Laptop",
+                    "containerId": %d,
+                    "quantity": 1
+                }
+            }]
+        """.formatted(UUID.randomUUID(), containerId);
 
         given()
                 .contentType("application/json")
-                .body(requestBody)
-                .when().post("/api/v1/items")
+                .body(command)
+                .when().post("/commands")
                 .then()
-                .statusCode(201)
-                .body("tags", hasSize(3));
+                .statusCode(200)
+                .body("[0].status", is("APPLIED"))
+                .body("[0].snapshot.tags", hasSize(3));
     }
 
     @Test
     public void testAddTagsToItem() {
         // Create item — "Laptop" gets auto-tag "Technik"
-        String createBody = """
-            {
-                "name": "Laptop",
-                "containerId": %d,
-                "quantity": 1
-            }
-        """.formatted(containerId);
+        String createCommand = """
+            [{
+                "commandId": "%s",
+                "commandType": "ITEM_CREATE",
+                "payload": {
+                    "name": "Laptop",
+                    "containerId": %d,
+                    "quantity": 1
+                }
+            }]
+        """.formatted(UUID.randomUUID(), containerId);
 
         Long itemId = given()
                 .contentType("application/json")
-                .body(createBody)
-                .when().post("/api/v1/items")
+                .body(createCommand)
+                .when().post("/commands")
                 .then()
-                .statusCode(201)
-                .body("tags", hasItem("Technik"))
-                .extract().jsonPath().getLong("id");
+                .statusCode(200)
+                .body("[0].status", is("APPLIED"))
+                .body("[0].snapshot.tags", hasItem("Technik"))
+                .extract().jsonPath().getLong("[0].entityId");
 
         // Update: keep "Technik" and add two more tags
-        String updateBody = """
-            {
-                "id": %d,
-                "name": "Laptop",
-                "containerId": %d,
-                "quantity": 1,
-                "tags": ["Technik", "Büro", "Arbeit"]
-            }
-        """.formatted(itemId, containerId);
+        // First get current version
+        Long version = given()
+                .when().get("/api/v1/items/" + itemId)
+                .then()
+                .statusCode(200)
+                .extract().jsonPath().getLong("version");
+
+        String updateCommand = """
+            [{
+                "commandId": "%s",
+                "commandType": "ITEM_UPDATE",
+                "entityId": %d,
+                "payload": {
+                    "name": "Laptop",
+                    "quantity": 1,
+                    "tags": ["Technik", "Büro", "Arbeit"],
+                    "version": %d
+                }
+            }]
+        """.formatted(UUID.randomUUID(), itemId, version);
 
         given()
                 .contentType("application/json")
-                .body(updateBody)
-                .when().put("/api/v1/items/" + itemId)
+                .body(updateCommand)
+                .when().post("/commands")
                 .then()
-                .statusCode(200);
+                .statusCode(200)
+                .body("[0].status", is("APPLIED"));
 
         // Verify via GET
         given()
@@ -170,41 +208,58 @@ public class ItemResourceTest {
     @Test
     public void testRemoveTagsFromItem() {
         // Create item — "Kleiner roter Laptop" gets 3 auto-tags
-        String createBody = """
-            {
-                "name": "Kleiner roter Laptop",
-                "containerId": %d,
-                "quantity": 1
-            }
-        """.formatted(containerId);
+        String createCommand = """
+            [{
+                "commandId": "%s",
+                "commandType": "ITEM_CREATE",
+                "payload": {
+                    "name": "Kleiner roter Laptop",
+                    "containerId": %d,
+                    "quantity": 1
+                }
+            }]
+        """.formatted(UUID.randomUUID(), containerId);
 
         Long itemId = given()
                 .contentType("application/json")
-                .body(createBody)
-                .when().post("/api/v1/items")
+                .body(createCommand)
+                .when().post("/commands")
                 .then()
-                .statusCode(201)
-                .body("tags", hasSize(3))
-                .body("tags", hasItems("Technik", "Klein", "Farbe: Rot"))
-                .extract().jsonPath().getLong("id");
+                .statusCode(200)
+                .body("[0].status", is("APPLIED"))
+                .body("[0].snapshot.tags", hasSize(3))
+                .body("[0].snapshot.tags", hasItems("Technik", "Klein", "Farbe: Rot"))
+                .extract().jsonPath().getLong("[0].entityId");
+
+        // Get current version
+        Long version = given()
+                .when().get("/api/v1/items/" + itemId)
+                .then()
+                .statusCode(200)
+                .extract().jsonPath().getLong("version");
 
         // Update: keep only "Technik", remove "Klein" and "Farbe: Rot"
-        String updateBody = """
-            {
-                "id": %d,
-                "name": "Kleiner roter Laptop",
-                "containerId": %d,
-                "quantity": 1,
-                "tags": ["Technik"]
-            }
-        """.formatted(itemId, containerId);
+        String updateCommand = """
+            [{
+                "commandId": "%s",
+                "commandType": "ITEM_UPDATE",
+                "entityId": %d,
+                "payload": {
+                    "name": "Kleiner roter Laptop",
+                    "quantity": 1,
+                    "tags": ["Technik"],
+                    "version": %d
+                }
+            }]
+        """.formatted(UUID.randomUUID(), itemId, version);
 
         given()
                 .contentType("application/json")
-                .body(updateBody)
-                .when().put("/api/v1/items/" + itemId)
+                .body(updateCommand)
+                .when().post("/commands")
                 .then()
-                .statusCode(200);
+                .statusCode(200)
+                .body("[0].status", is("APPLIED"));
 
         // Verify via GET
         given()

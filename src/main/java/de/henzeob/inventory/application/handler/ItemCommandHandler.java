@@ -1,0 +1,242 @@
+package de.henzeob.inventory.application.handler;
+
+import de.henzeob.inventory.application.ItemService;
+import de.henzeob.inventory.mapper.ItemMapper;
+import de.henzeob.inventory.model.dto.ItemDTO;
+import de.henzeob.inventory.model.entity.Command;
+import de.henzeob.inventory.model.entity.Item;
+import de.henzeob.inventory.model.enums.CommandType;
+import de.henzeob.inventory.repository.CommandRepository;
+import de.henzeob.inventory.repository.ItemRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+@ApplicationScoped
+public class ItemCommandHandler {
+
+    @Inject
+    ItemService itemService;
+
+    @Inject
+    ItemRepository itemRepository;
+
+    @Inject
+    ItemMapper itemMapper;
+
+    @Inject
+    CommandRepository commandRepository;
+
+    public Object handle(CommandType type, Command command, String userId) {
+        Map<String, Object> p = command.payload;
+        return switch (type) {
+            case ITEM_CREATE -> handleCreate(p, userId);
+            case ITEM_UPDATE -> handleUpdate(command.entityId, p, userId);
+            case ITEM_DELETE -> handleDelete(command.entityId, userId, p);
+            case ITEM_MOVE   -> handleMove(command.entityId, p, userId);
+            default -> throw new IllegalArgumentException("Not an ITEM command: " + type);
+        };
+    }
+
+    private ItemDTO handleCreate(Map<String, Object> p, String userId) {
+        ItemDTO dto = new ItemDTO();
+        dto.name = required(p, "name");
+        dto.description = (String) p.get("description");
+        dto.containerId = toLong(p.get("containerId"));
+        dto.position = (String) p.get("position");
+        dto.quantity = p.get("quantity") != null ? toInteger(p.get("quantity")) : 1;
+        dto.barcode = (String) p.get("barcode");
+        if (p.get("tags") instanceof List<?> rawTags) {
+            Set<String> tags = new LinkedHashSet<>();
+            for (Object t : rawTags) tags.add(t.toString());
+            dto.tags = tags;
+        }
+        return itemService.createItem(dto, userId);
+    }
+
+    private Object handleUpdate(Long entityId, Map<String, Object> p, String userId) {
+        Long clientVersion = toLong(p.get("version"));
+        boolean force = Boolean.TRUE.equals(p.get("force"));
+
+        Item item = itemRepository.findByIdAndUser(entityId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Item not found: " + entityId));
+
+        if (force || clientVersion == null || item.version.equals(clientVersion)) {
+            return applyUpdate(entityId, p, userId);
+        }
+
+        // Stale version: 3-way merge using server command history to determine
+        // which fields the server changed between clientVersion and current version.
+        // A field is a conflict only if BOTH the client and server changed it.
+        long versionGap = item.version - clientVersion;
+        Set<String> serverChanged = serverChangedItemFields(entityId, versionGap);
+
+        List<String> conflictingFields = new ArrayList<>();
+
+        if (p.containsKey("name") && !Objects.equals(p.get("name"), item.name)
+                && serverChanged.contains("name")) {
+            conflictingFields.add("name");
+        }
+        if (p.containsKey("description") && !Objects.equals(p.get("description"), item.description)
+                && serverChanged.contains("description")) {
+            conflictingFields.add("description");
+        }
+        if (p.containsKey("position") && !Objects.equals(p.get("position"), item.position)
+                && serverChanged.contains("position")) {
+            conflictingFields.add("position");
+        }
+        if (p.containsKey("quantity") && p.get("quantity") != null) {
+            Integer clientQty = toInteger(p.get("quantity"));
+            if (!Objects.equals(clientQty, item.quantity) && serverChanged.contains("quantity")) {
+                conflictingFields.add("quantity");
+            }
+        }
+        if (p.containsKey("barcode") && !Objects.equals(p.get("barcode"), item.barcode)
+                && serverChanged.contains("barcode")) {
+            conflictingFields.add("barcode");
+        }
+        if (p.containsKey("tags")) {
+            Set<String> clientTags = extractTags(p);
+            Set<String> serverTags = itemMapper.toDTO(item).tags;
+            if (!Objects.equals(clientTags, serverTags) && serverChanged.contains("tags")) {
+                conflictingFields.add("tags");
+            }
+        }
+
+        if (!conflictingFields.isEmpty()) {
+            ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
+            info.clientVersion = clientVersion;
+            info.serverVersion = item.version;
+            info.conflictingFields = conflictingFields;
+            info.serverSnapshot = itemMapper.toDTO(item);
+            info.clientPayload = p;
+            return new ConflictResult.Conflicted(info);
+        }
+
+        // Auto-merge: no field-level conflicts.
+        // Apply the client's changes on top of the current server state.
+        ItemDTO overlayDto = itemMapper.toDTO(item);
+        if (p.containsKey("name"))        overlayDto.name = (String) p.get("name");
+        if (p.containsKey("description")) overlayDto.description = (String) p.get("description");
+        if (p.containsKey("position"))    overlayDto.position = (String) p.get("position");
+        if (p.containsKey("quantity"))    overlayDto.quantity = p.get("quantity") != null ? toInteger(p.get("quantity")) : null;
+        if (p.containsKey("barcode"))     overlayDto.barcode = (String) p.get("barcode");
+        if (p.containsKey("tags"))        overlayDto.tags = extractTags(p);
+        return itemService.updateItem(entityId, overlayDto, userId);
+    }
+
+    /**
+     * Queries the {@code limit} most recently applied commands for this entity and
+     * returns the set of payload field names that appear in ITEM_UPDATE commands
+     * (excluding meta-fields). These represent fields the server changed server-side.
+     */
+    private Set<String> serverChangedItemFields(Long entityId, long versionGap) {
+        if (versionGap <= 0) return Set.of();
+        List<Command> recent = commandRepository.findRecentApplied(
+                entityId, "ITEM", (int) Math.min(versionGap, 100));
+        Set<String> meta = Set.of("version", "force", "containerId");
+        Set<String> changed = new HashSet<>();
+        for (Command cmd : recent) {
+            if (cmd.commandType == CommandType.ITEM_UPDATE && cmd.payload != null) {
+                for (String key : cmd.payload.keySet()) {
+                    if (!meta.contains(key)) changed.add(key);
+                }
+            }
+        }
+        return changed;
+    }
+
+    private ItemDTO applyUpdate(Long entityId, Map<String, Object> p, String userId) {
+        ItemDTO dto = new ItemDTO();
+        dto.id = entityId;
+        dto.name = (String) p.get("name");
+        dto.description = (String) p.get("description");
+        dto.position = (String) p.get("position");
+        dto.quantity = p.get("quantity") != null ? toInteger(p.get("quantity")) : null;
+        dto.barcode = (String) p.get("barcode");
+        dto.version = toLong(p.get("version"));
+        Set<String> tags = new LinkedHashSet<>();
+        if (p.get("tags") instanceof List<?> rawTags) {
+            for (Object t : rawTags) tags.add(t.toString());
+        }
+        dto.tags = tags;
+        return itemService.updateItem(entityId, dto, userId);
+    }
+
+    private Object handleDelete(Long entityId, String userId, Map<String, Object> p) {
+        Long clientVersion = toLong(p.get("version"));
+        boolean force = Boolean.TRUE.equals(p.get("force"));
+
+        if (!force && clientVersion != null) {
+            Item item = itemRepository.findByIdAndUser(entityId, userId)
+                    .orElseThrow(() -> new IllegalArgumentException("Item not found: " + entityId));
+            if (item.version > clientVersion) {
+                ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
+                info.clientVersion = clientVersion;
+                info.serverVersion = item.version;
+                info.conflictingFields = List.of();
+                info.serverSnapshot = itemMapper.toDTO(item);
+                info.clientPayload = p;
+                return new ConflictResult.Conflicted(info);
+            }
+        }
+
+        itemService.deleteItem(entityId, userId);
+        return null;
+    }
+
+    private Object handleMove(Long entityId, Map<String, Object> p, String userId) {
+        Long clientVersion = toLong(p.get("version"));
+        boolean force = Boolean.TRUE.equals(p.get("force"));
+
+        if (!force && clientVersion != null) {
+            Item item = itemRepository.findByIdAndUser(entityId, userId)
+                    .orElseThrow(() -> new IllegalArgumentException("Item not found: " + entityId));
+            if (item.version > clientVersion) {
+                ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
+                info.clientVersion = clientVersion;
+                info.serverVersion = item.version;
+                info.conflictingFields = List.of();
+                info.serverSnapshot = itemMapper.toDTO(item);
+                info.clientPayload = p;
+                return new ConflictResult.Conflicted(info);
+            }
+        }
+
+        Long containerId = toLong(required(p, "containerId"));
+        return itemService.moveItem(entityId, userId, containerId);
+    }
+
+    private Set<String> extractTags(Map<String, Object> p) {
+        Set<String> tags = new LinkedHashSet<>();
+        if (p.get("tags") instanceof List<?> rawTags) {
+            for (Object t : rawTags) tags.add(t.toString());
+        }
+        return tags;
+    }
+
+    private <T> T required(Map<String, Object> p, String key) {
+        Object val = p.get(key);
+        if (val == null) throw new IllegalArgumentException("Missing required payload field: " + key);
+        //noinspection unchecked
+        return (T) val;
+    }
+
+    private Long toLong(Object val) {
+        if (val == null) return null;
+        if (val instanceof Number n) return n.longValue();
+        return Long.parseLong(val.toString());
+    }
+
+    private Integer toInteger(Object val) {
+        if (val instanceof Number n) return n.intValue();
+        return Integer.parseInt(val.toString());
+    }
+}

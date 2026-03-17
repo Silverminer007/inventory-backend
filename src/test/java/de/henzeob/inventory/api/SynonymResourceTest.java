@@ -3,6 +3,8 @@ package de.henzeob.inventory.api;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
+
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -22,24 +24,28 @@ public class SynonymResourceTest {
 
     @Test
     public void testCreateAndDeleteSynonym() {
-        String requestBody = """
-            {
-                "canonicalTerm": "Fernseher",
-                "synonym": "TV"
-            }
-        """;
+        // Create synonym via command
+        String createCommand = """
+            [{
+                "commandId": "%s",
+                "commandType": "SYNONYM_CREATE",
+                "payload": {
+                    "canonicalTerm": "Fernseher",
+                    "synonym": "TV"
+                }
+            }]
+        """.formatted(UUID.randomUUID());
 
-        // Create synonym
         Long id = given()
                 .contentType("application/json")
-                .body(requestBody)
-                .when().post("/api/v1/synonyms")
+                .body(createCommand)
+                .when().post("/commands")
                 .then()
-                .statusCode(201)
-                .body("canonicalTerm", is("Fernseher"))
-                .body("synonym", is("TV"))
-                .body("id", notNullValue())
-                .extract().jsonPath().getLong("id");
+                .statusCode(200)
+                .body("[0].status", is("APPLIED"))
+                .body("[0].snapshot.canonicalTerm", is("Fernseher"))
+                .body("[0].snapshot.synonym", is("TV"))
+                .extract().jsonPath().getLong("[0].entityId");
 
         // Verify it appears in the list
         given()
@@ -48,27 +54,45 @@ public class SynonymResourceTest {
                 .statusCode(200)
                 .body("size()", greaterThanOrEqualTo(1));
 
-        // Delete synonym
+        // Delete synonym via command
+        String deleteCommand = """
+            [{
+                "commandId": "%s",
+                "commandType": "SYNONYM_DELETE",
+                "entityId": %d,
+                "payload": {}
+            }]
+        """.formatted(UUID.randomUUID(), id);
+
         given()
-                .when().delete("/api/v1/synonyms/" + id)
+                .contentType("application/json")
+                .body(deleteCommand)
+                .when().post("/commands")
                 .then()
-                .statusCode(204);
+                .statusCode(200)
+                .body("[0].status", is("APPLIED"));
     }
 
     @Test
     public void testCreateSynonymValidation() {
-        String requestBody = """
-            {
-                "canonicalTerm": "",
-                "synonym": ""
-            }
-        """;
+        // Missing required fields — command should FAIL
+        String command = """
+            [{
+                "commandId": "%s",
+                "commandType": "SYNONYM_CREATE",
+                "payload": {
+                    "canonicalTerm": "",
+                    "synonym": ""
+                }
+            }]
+        """.formatted(UUID.randomUUID());
 
         given()
                 .contentType("application/json")
-                .body(requestBody)
-                .when().post("/api/v1/synonyms")
+                .body(command)
+                .when().post("/commands")
                 .then()
-                .statusCode(400);
+                .statusCode(200)
+                .body("[0].status", is("FAILED"));
     }
 }

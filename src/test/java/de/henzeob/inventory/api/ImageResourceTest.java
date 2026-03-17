@@ -3,7 +3,10 @@ package de.henzeob.inventory.api;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
+
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 
 @QuarkusTest
@@ -12,7 +15,7 @@ public class ImageResourceTest {
     @Test
     public void testGetImagesForNonExistentItem() {
         given()
-                .when().get("/api/v1/items/99999/images")
+                .when().get("/api/v1/images/items/99999")
                 .then()
                 .statusCode(404);
     }
@@ -20,7 +23,7 @@ public class ImageResourceTest {
     @Test
     public void testGetImagesForNonExistentContainer() {
         given()
-                .when().get("/api/v1/containers/99999/images")
+                .when().get("/api/v1/images/containers/99999")
                 .then()
                 .statusCode(404);
     }
@@ -35,27 +38,21 @@ public class ImageResourceTest {
 
     @Test
     public void testDeleteNonExistentImage() {
-        given()
-                .when().delete("/api/v1/images/99999")
-                .then()
-                .statusCode(404);
-    }
+        String command = """
+            [{
+                "commandId": "%s",
+                "commandType": "IMAGE_DELETE",
+                "entityId": 99999,
+                "payload": {}
+            }]
+        """.formatted(UUID.randomUUID());
 
-    @Test
-    public void testUploadImageForNonExistentItem() {
         given()
-                .multiPart("file", "test.jpg", "fake image content".getBytes(), "image/jpeg")
-                .when().post("/api/v1/items/99999/images")
+                .contentType("application/json")
+                .body(command)
+                .when().post("/commands")
                 .then()
-                .statusCode(404);
-    }
-
-    @Test
-    public void testUploadImageForNonExistentContainer() {
-        given()
-                .multiPart("file", "test.jpg", "fake image content".getBytes(), "image/jpeg")
-                .when().post("/api/v1/containers/99999/images")
-                .then()
-                .statusCode(404);
+                .statusCode(200)
+                .body("[0].status", is("FAILED"));
     }
 }

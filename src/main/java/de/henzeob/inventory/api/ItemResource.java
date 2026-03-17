@@ -3,9 +3,7 @@ package de.henzeob.inventory.api;
 import de.henzeob.inventory.application.TaggingService;
 import de.henzeob.inventory.model.dto.ItemDTO;
 import de.henzeob.inventory.application.ItemService;
-import de.henzeob.inventory.model.entity.ItemTag;
 import jakarta.inject.Inject;
-import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -27,8 +25,6 @@ public class ItemResource {
     @Inject
     TaggingService taggingService;
 
-    // TODO: Später mit Keycloak Security Context ersetzen
-    // Für MVP: Hardcoded User
     private String getCurrentUserId() {
         return "demo-user";
     }
@@ -48,47 +44,6 @@ public class ItemResource {
     ) {
         ItemDTO item = itemService.getItem(id, getCurrentUserId());
         return Response.ok(item).build();
-    }
-
-    @POST
-    @Operation(summary = "Create new item")
-    public Response createItem(@Valid ItemDTO dto) {
-        ItemDTO created = itemService.createItem(dto, getCurrentUserId());
-        return Response.status(Response.Status.CREATED).entity(created).build();
-    }
-
-    @PUT
-    @Path("/{id}")
-    @Operation(summary = "Update item")
-    public Response updateItem(
-            @PathParam("id") Long id,
-            @Valid ItemDTO dto
-    ) {
-        ItemDTO updated = itemService.updateItem(id, dto, getCurrentUserId());
-        return Response.ok(updated).build();
-    }
-
-    @DELETE
-    @Path("/{id}")
-    @Operation(summary = "Delete item")
-    public Response deleteItem(@PathParam("id") Long id) {
-        itemService.deleteItem(id, getCurrentUserId());
-        return Response.noContent().build();
-    }
-
-    @POST
-    @Path("/{id}/move")
-    @Operation(summary = "Move item to different container")
-    public Response moveItem(
-            @PathParam("id") Long id,
-            MoveRequest request
-    ) {
-        ItemDTO moved = itemService.moveItem(
-                id,
-                getCurrentUserId(),
-                request.containerId
-        );
-        return Response.ok(moved).build();
     }
 
     @GET
@@ -125,10 +80,5 @@ public class ItemResource {
     public Response getItemsByTag(@PathParam("tag") String tag) {
         List<ItemDTO> items = itemService.getItemsByTag(tag, getCurrentUserId());
         return Response.ok(items).build();
-    }
-
-    // DTO for move request
-    public static class MoveRequest {
-        public Long containerId;
     }
 }

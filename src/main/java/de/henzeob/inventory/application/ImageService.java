@@ -129,6 +129,61 @@ public class ImageService {
         imageRepository.delete(image);
     }
 
+    /**
+     * Upload a file to S3 under a temporary key (used in two-step image upload flow).
+     * Returns the s3Key so the client can reference it in an IMAGE_UPLOAD command.
+     */
+    public String uploadToS3Temp(InputStream data, long fileSize, String filename, String contentType, String userId) {
+        String safeFilename = filename != null ? filename.replaceAll("[^a-zA-Z0-9._-]", "_") : "file";
+        String s3Key = userId + "/temp/" + UUID.randomUUID() + "_" + safeFilename;
+        uploadToS3(s3Key, data, fileSize, contentType);
+        return s3Key;
+    }
+
+    public String buildTempS3Url(String s3Key) {
+        return getS3Url(s3Key);
+    }
+
+    /**
+     * Create an Image DB record for an already-uploaded S3 object (used by IMAGE_UPLOAD command handler).
+     */
+    @Transactional
+    public ImageDTO linkImageFromS3Key(String s3Key, String filename, String contentType, Long fileSize,
+                                       boolean isPrimary, Long itemId, Long containerId, String userId) {
+        Image image = new Image();
+        image.s3Key = s3Key;
+        image.s3Url = getS3Url(s3Key);
+        image.filename = filename;
+        image.contentType = contentType;
+        image.fileSize = fileSize != null ? fileSize : 0L;
+        image.isPrimary = isPrimary;
+        image.userId = userId;
+
+        if (itemId != null) {
+            image.item = itemRepository.findByIdAndUser(itemId, userId)
+                    .orElseThrow(() -> new jakarta.ws.rs.NotFoundException("Item nicht gefunden"));
+        } else if (containerId != null) {
+            image.container = containerService.getContainer(containerId, userId);
+        } else {
+            throw new IllegalArgumentException("Either itemId or containerId must be provided");
+        }
+
+        imageRepository.persist(image);
+        return imageMapper.toDTO(image);
+    }
+
+    /**
+     * Set a specific image as the primary image for its parent entity.
+     */
+    @Transactional
+    public ImageDTO setPrimaryImage(Long imageId, String userId) {
+        Image image = imageRepository.findByIdAndUser(imageId, userId)
+                .orElseThrow(() -> new jakarta.ws.rs.NotFoundException("Bild nicht gefunden"));
+        image.isPrimary = true;
+        imageRepository.persist(image);
+        return imageMapper.toDTO(image);
+    }
+
     private String buildS3Key(String userId, String entityType, Long entityId, String filename) {
         String safeFilename = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
         return userId + "/" + entityType + "/" + entityId + "/" + UUID.randomUUID() + "_" + safeFilename;
