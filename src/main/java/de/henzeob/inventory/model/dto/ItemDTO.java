@@ -6,10 +6,11 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.UUID;
 
 public class ItemDTO {
 
-    public Long id;
+    public UUID id;
 
     @NotBlank(message = "Name darf nicht leer sein")
     public String name;
@@ -17,7 +18,7 @@ public class ItemDTO {
     public String description;
 
     // Location
-    public Long containerId;
+    public UUID containerId;
     public String position;
 
     @NotNull
@@ -42,7 +43,7 @@ public class ItemDTO {
 
     public static class ContainerInfo {
         public String type;  // BOX, SHELF, ROOM
-        public Long id;
+        public UUID id;
         public String name;
         public String path;
     }

@@ -10,6 +10,7 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 import java.util.List;
+import java.util.UUID;
 
 @Path("/api/v1/images")
 @Tag(name = "Images", description = "Image upload and management endpoints")
@@ -26,7 +27,7 @@ public class ImageResource {
     @Path("/items/{id}")
     @Produces(MediaType.APPLICATION_JSON)
     @Operation(summary = "List images for item")
-    public Response getImagesForItem(@PathParam("id") Long itemId) {
+    public Response getImagesForItem(@PathParam("id") UUID itemId) {
         List<ImageDTO> images = imageService.getImagesForItem(itemId, getCurrentUserId());
         return Response.ok(images).build();
     }
@@ -35,7 +36,7 @@ public class ImageResource {
     @Path("/containers/{id}")
     @Produces(MediaType.APPLICATION_JSON)
     @Operation(summary = "List images for container")
-    public Response getImagesForContainer(@PathParam("id") Long containerId) {
+    public Response getImagesForContainer(@PathParam("id") UUID containerId) {
         List<ImageDTO> images = imageService.getImagesForContainer(containerId, getCurrentUserId());
         return Response.ok(images).build();
     }
@@ -44,7 +45,7 @@ public class ImageResource {
     @Path("/{imageId}")
     @Produces(MediaType.APPLICATION_JSON)
     @Operation(summary = "Get image metadata")
-    public Response getImage(@PathParam("imageId") Long imageId) {
+    public Response getImage(@PathParam("imageId") UUID imageId) {
         ImageDTO image = imageService.getImage(imageId, getCurrentUserId());
         return Response.ok(image).build();
     }

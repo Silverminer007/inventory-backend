@@ -11,6 +11,7 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -22,19 +23,13 @@ public class ContainerService {
     @Inject
     ContainerMapper containerMapper;
 
-    /**
-     * Find container by ID for a user, or throw NotFoundException.
-     */
-    public Container getContainer(Long id, String userId) {
+    public Container getContainer(UUID id, String userId) {
         return containerRepository.findByIdAndUser(id, userId)
                 .orElseThrow(() -> new NotFoundException("Container nicht gefunden"));
     }
 
-    /**
-     * Create a new container with parent validation.
-     */
     @Transactional
-    public Container createContainer(Container container, Long parentContainerId, String userId) {
+    public Container createContainer(Container container, UUID parentContainerId, String userId) {
         container.userId = userId;
 
         if (parentContainerId != null) {
@@ -50,11 +45,8 @@ public class ContainerService {
         return container;
     }
 
-    /**
-     * Move a container to a new parent.
-     */
     @Transactional
-    public Container moveContainer(Long containerId, Long newParentId, String userId) {
+    public Container moveContainer(UUID containerId, UUID newParentId, String userId) {
         Container container = getContainer(containerId, userId);
 
         if (container.containerType == ContainerType.ROOM) {
@@ -85,7 +77,7 @@ public class ContainerService {
                 .collect(Collectors.toList());
     }
 
-    public ContainerDTO getContainerDTO(Long id, String userId) {
+    public ContainerDTO getContainerDTO(UUID id, String userId) {
         Container container = getContainer(id, userId);
         return containerMapper.toDTOWithChildren(container);
     }
@@ -97,7 +89,7 @@ public class ContainerService {
                 .collect(Collectors.toList());
     }
 
-    public List<ContainerDTO> getChildContainers(Long parentId, String userId) {
+    public List<ContainerDTO> getChildContainers(UUID parentId, String userId) {
         getContainer(parentId, userId);
         return containerRepository.findByParentAndUser(parentId, userId)
                 .stream()
@@ -114,7 +106,7 @@ public class ContainerService {
     }
 
     @Transactional
-    public ContainerDTO updateContainer(Long id, ContainerDTO dto, String userId) {
+    public ContainerDTO updateContainer(UUID id, ContainerDTO dto, String userId) {
         Container container = getContainer(id, userId);
 
         containerMapper.updateEntity(container, dto);
@@ -125,7 +117,7 @@ public class ContainerService {
     }
 
     @Transactional
-    public void deleteContainer(Long id, String userId) {
+    public void deleteContainer(UUID id, String userId) {
         Container container = getContainer(id, userId);
 
         if (!container.childContainers.isEmpty()) {
@@ -152,8 +144,8 @@ public class ContainerService {
         }
     }
 
-    private void validateNoCircularReference(Long containerId, Long newParentId, String userId) {
-        Long currentId = newParentId;
+    private void validateNoCircularReference(UUID containerId, UUID newParentId, String userId) {
+        UUID currentId = newParentId;
         int depth = 0;
         while (currentId != null && depth < 20) {
             if (currentId.equals(containerId)) {

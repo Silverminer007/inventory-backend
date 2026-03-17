@@ -30,7 +30,7 @@ public class CommandRepository implements PanacheRepository<Command> {
      * Returns the {@code limit} most recently applied commands for a given entity,
      * ordered by insertion id descending. Used for 3-way merge field-conflict detection.
      */
-    public List<Command> findRecentApplied(Long entityId, String entityType, int limit) {
+    public List<Command> findRecentApplied(UUID entityId, String entityType, int limit) {
         if (limit <= 0) return List.of();
         return find("entityId = ?1 and entityType = ?2 and status = ?3",
                 Sort.by("id").descending(),

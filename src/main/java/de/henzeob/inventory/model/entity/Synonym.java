@@ -5,14 +5,15 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "synonyms", uniqueConstraints = @UniqueConstraint(columnNames = {"canonical_term", "synonym"}))
 public class Synonym extends PanacheEntityBase {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    public Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    public UUID id;
 
     @NotBlank
     @Column(name = "canonical_term", nullable = false)

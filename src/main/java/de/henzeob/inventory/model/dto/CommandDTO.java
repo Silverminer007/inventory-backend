@@ -8,7 +8,7 @@ public class CommandDTO {
     public UUID commandId;
     public String commandType;
     public Integer payloadVersion = 1;
-    public Long entityId;
+    public UUID entityId;
     public Map<String, Object> payload;
     public String clientId;
     public Long clientSequence;

@@ -15,7 +15,7 @@ public class ImageResourceTest {
     @Test
     public void testGetImagesForNonExistentItem() {
         given()
-                .when().get("/api/v1/images/items/99999")
+                .when().get("/api/v1/images/items/00000000-0000-0000-0000-000000000000")
                 .then()
                 .statusCode(404);
     }
@@ -23,7 +23,7 @@ public class ImageResourceTest {
     @Test
     public void testGetImagesForNonExistentContainer() {
         given()
-                .when().get("/api/v1/images/containers/99999")
+                .when().get("/api/v1/images/containers/00000000-0000-0000-0000-000000000000")
                 .then()
                 .statusCode(404);
     }
@@ -31,7 +31,7 @@ public class ImageResourceTest {
     @Test
     public void testGetNonExistentImage() {
         given()
-                .when().get("/api/v1/images/99999")
+                .when().get("/api/v1/images/00000000-0000-0000-0000-000000000000")
                 .then()
                 .statusCode(404);
     }
@@ -42,7 +42,7 @@ public class ImageResourceTest {
             [{
                 "commandId": "%s",
                 "commandType": "IMAGE_DELETE",
-                "entityId": 99999,
+                "entityId": "00000000-0000-0000-0000-000000000000",
                 "payload": {}
             }]
         """.formatted(UUID.randomUUID());

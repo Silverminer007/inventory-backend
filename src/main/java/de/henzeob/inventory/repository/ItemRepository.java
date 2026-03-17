@@ -4,26 +4,19 @@ import de.henzeob.inventory.model.entity.Item;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
-import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @ApplicationScoped
 public class ItemRepository implements PanacheRepository<Item> {
 
-    /**
-     * Find all items for a specific user
-     */
     public List<Item> findByUser(String userId) {
         return list("userId", Sort.by("name"), userId);
     }
 
-    /**
-     * Find item by ID and user (security check)
-     */
-    public Optional<Item> findByIdAndUser(Long id, String userId) {
+    public Optional<Item> findByIdAndUser(UUID id, String userId) {
         return find("id = ?1 and userId = ?2", id, userId).firstResultOptional();
     }
 
@@ -52,8 +45,9 @@ public class ItemRepository implements PanacheRepository<Item> {
     /**
      * Fuzzy search using PostgreSQL trigram similarity
      */
+    @SuppressWarnings("unchecked")
     public List<Item> fuzzySearch(String query, String userId, double threshold) {
-        List<Long> itemIds = getEntityManager()
+        List<UUID> itemIds = getEntityManager()
                 .createNativeQuery("""
                             SELECT i.id
                             FROM items i
@@ -71,7 +65,7 @@ public class ItemRepository implements PanacheRepository<Item> {
                               similarity(COALESCE(i.description, ''), :query)
                             ) DESC
                             LIMIT 20
-                        """, Long.class)
+                        """, UUID.class)
                 .setParameter("query", query)
                 .setParameter("userId", userId)
                 .setParameter("threshold", threshold)
@@ -80,9 +74,6 @@ public class ItemRepository implements PanacheRepository<Item> {
         return list("id IN ?1", itemIds);
     }
 
-    /**
-     * Find items by tag
-     */
     public List<Item> findByTag(String tag, String userId) {
         return getEntityManager()
                 .createQuery("""
@@ -96,10 +87,7 @@ public class ItemRepository implements PanacheRepository<Item> {
                 .getResultList();
     }
 
-    /**
-     * Find items in a specific container
-     */
-    public List<Item> findByContainer(Long containerId, String userId) {
+    public List<Item> findByContainer(UUID containerId, String userId) {
         return list("container.id = ?1 and userId = ?2", Sort.by("name"), containerId, userId);
     }
 
@@ -107,7 +95,7 @@ public class ItemRepository implements PanacheRepository<Item> {
      * Find all items in a container tree (container + all descendants) using recursive CTE
      */
     @SuppressWarnings("unchecked")
-    public List<Item> findAllInContainerTree(Long containerId, String userId) {
+    public List<Item> findAllInContainerTree(UUID containerId, String userId) {
         return getEntityManager()
                 .createNativeQuery("""
                             WITH RECURSIVE descendants AS (
@@ -126,9 +114,6 @@ public class ItemRepository implements PanacheRepository<Item> {
                 .getResultList();
     }
 
-    /**
-     * Find all distinct tags used by a user's items
-     */
     @SuppressWarnings("unchecked")
     public List<String> findDistinctTagsByUser(String userId) {
         return getEntityManager()
@@ -143,16 +128,10 @@ public class ItemRepository implements PanacheRepository<Item> {
                 .getResultList();
     }
 
-    /**
-     * Count items by user
-     */
     public long countByUser(String userId) {
         return count("userId", userId);
     }
 
-    /**
-     * Find items modified since timestamp (for sync)
-     */
     public List<Item> findModifiedSince(String userId, java.time.LocalDateTime since) {
         return list("userId = ?1 and lastModified > ?2",
                 Sort.by("lastModified"), userId, since);

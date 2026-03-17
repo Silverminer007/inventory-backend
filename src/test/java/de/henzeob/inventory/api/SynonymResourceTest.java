@@ -36,7 +36,7 @@ public class SynonymResourceTest {
             }]
         """.formatted(UUID.randomUUID());
 
-        Long id = given()
+        String id = given()
                 .contentType("application/json")
                 .body(createCommand)
                 .when().post("/commands")
@@ -45,7 +45,7 @@ public class SynonymResourceTest {
                 .body("[0].status", is("APPLIED"))
                 .body("[0].snapshot.canonicalTerm", is("Fernseher"))
                 .body("[0].snapshot.synonym", is("TV"))
-                .extract().jsonPath().getLong("[0].entityId");
+                .extract().jsonPath().getString("[0].entityId");
 
         // Verify it appears in the list
         given()
@@ -59,7 +59,7 @@ public class SynonymResourceTest {
             [{
                 "commandId": "%s",
                 "commandType": "SYNONYM_DELETE",
-                "entityId": %d,
+                "entityId": "%s",
                 "payload": {}
             }]
         """.formatted(UUID.randomUUID(), id);

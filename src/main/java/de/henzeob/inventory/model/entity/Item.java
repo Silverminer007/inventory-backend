@@ -13,6 +13,7 @@ import org.hibernate.search.mapper.pojo.mapping.definition.annotation.KeywordFie
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Indexed
 @Entity
@@ -20,8 +21,8 @@ import java.util.Set;
 public class Item extends PanacheEntityBase {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    public Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    public UUID id;
 
     @NotBlank
     @Column(nullable = false)
@@ -95,7 +96,7 @@ public class Item extends PanacheEntityBase {
         return container != null ? container.containerType.name() : "UNKNOWN";
     }
 
-    public Long getContainerId() {
+    public UUID getContainerId() {
         return container != null ? container.id : null;
     }
 }

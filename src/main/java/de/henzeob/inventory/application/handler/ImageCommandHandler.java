@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.Map;
+import java.util.UUID;
 
 @ApplicationScoped
 public class ImageCommandHandler {
@@ -31,16 +32,16 @@ public class ImageCommandHandler {
         String contentType = (String) p.get("contentType");
         Long fileSize = toLong(p.get("fileSize"));
         boolean isPrimary = p.get("isPrimary") instanceof Boolean b ? b : Boolean.parseBoolean(String.valueOf(p.get("isPrimary")));
-        Long itemId = toLong(p.get("itemId"));
-        Long containerId = toLong(p.get("containerId"));
+        UUID itemId = toUUID(p.get("itemId"));
+        UUID containerId = toUUID(p.get("containerId"));
         return imageService.linkImageFromS3Key(s3Key, filename, contentType, fileSize, isPrimary, itemId, containerId, userId);
     }
 
-    private void handleDelete(Long entityId, String userId) {
+    private void handleDelete(UUID entityId, String userId) {
         imageService.deleteImage(entityId, userId);
     }
 
-    private ImageDTO handleSetPrimary(Long entityId, String userId) {
+    private ImageDTO handleSetPrimary(UUID entityId, String userId) {
         return imageService.setPrimaryImage(entityId, userId);
     }
 
@@ -49,6 +50,12 @@ public class ImageCommandHandler {
         Object val = p.get(key);
         if (val == null) throw new IllegalArgumentException("Missing required payload field: " + key);
         return (T) val;
+    }
+
+    private UUID toUUID(Object val) {
+        if (val == null) return null;
+        if (val instanceof UUID u) return u;
+        return UUID.fromString(val.toString());
     }
 
     private Long toLong(Object val) {

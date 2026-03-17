@@ -21,6 +21,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 
 @Path("/api/v1/items")
@@ -51,7 +52,7 @@ public class ItemResource {
     @Path("/{id}")
     @Operation(summary = "Get item by ID")
     public Response getItem(
-            @Parameter(description = "Item ID") @PathParam("id") Long id
+            @Parameter(description = "Item ID") @PathParam("id") UUID id
     ) {
         ItemDTO item = itemService.getItem(id, getCurrentUserId());
         return Response.ok(item).build();
@@ -96,7 +97,7 @@ public class ItemResource {
     @GET
     @Path("/{id}/images")
     @Operation(summary = "Get images for item")
-    public Response getImagesForItem(@PathParam("id") Long id) {
+    public Response getImagesForItem(@PathParam("id") UUID id) {
         List<ImageDTO> images = imageService.getImagesForItem(id, getCurrentUserId());
         return Response.ok(images).build();
     }
@@ -106,7 +107,7 @@ public class ItemResource {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Operation(summary = "Upload image for item")
     public Response uploadImageForItem(
-            @PathParam("id") Long id,
+            @PathParam("id") UUID id,
             @RestForm("file") FileUpload file,
             @RestForm("primary") @DefaultValue("false") boolean isPrimary
     ) throws IOException {

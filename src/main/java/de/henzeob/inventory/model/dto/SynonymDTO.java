@@ -1,10 +1,11 @@
 package de.henzeob.inventory.model.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import java.util.UUID;
 
 public class SynonymDTO {
 
-    public Long id;
+    public UUID id;
 
     @NotBlank(message = "Canonical term darf nicht leer sein")
     public String canonicalTerm;

@@ -8,7 +8,7 @@ import java.util.UUID;
 public class CommandResultDTO {
     public UUID commandId;
     public String status;
-    public Long entityId;
+    public UUID entityId;
     public String entityType;
     public Long serverSequence;
     public Instant appliedAt;

@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @ApplicationScoped
 public class SynonymRepository implements PanacheRepository<Synonym> {
@@ -20,7 +21,7 @@ public class SynonymRepository implements PanacheRepository<Synonym> {
     /**
      * Find synonym by ID, accessible by the given user (global or owned)
      */
-    public Optional<Synonym> findByIdAndUser(Long id, String userId) {
+    public Optional<Synonym> findByIdAndUser(UUID id, String userId) {
         return find("id = ?1 AND (userId IS NULL OR userId = ?2)", id, userId).firstResultOptional();
     }
 

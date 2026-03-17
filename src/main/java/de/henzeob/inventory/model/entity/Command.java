@@ -33,7 +33,7 @@ public class Command extends PanacheEntityBase {
     public String entityType;
 
     @Column(name = "entity_id")
-    public Long entityId;
+    public UUID entityId;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb", nullable = false)

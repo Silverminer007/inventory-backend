@@ -2,7 +2,7 @@ package de.henzeob.inventory.api;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.ValidatableResponse;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
@@ -32,24 +32,25 @@ import static org.hamcrest.Matchers.hasItem;
 public class CommandConflictTest {
 
     // Shared containers created once; never mutated by tests
-    private Long room1Id;
-    private Long room2Id;
+    private String room1Id;
+    private String room2Id;
 
-    @BeforeAll
+    @BeforeEach
     void createBaseContainers() {
+        if (room1Id != null) return;
         room1Id = postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_CREATE",
               "payload":{"name":"Conflict Test Room 1","containerType":"ROOM"}}]
             """.formatted(UUID.randomUUID()))
                 .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getLong("[0].entityId");
+                .extract().jsonPath().getString("[0].entityId");
 
         room2Id = postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_CREATE",
               "payload":{"name":"Conflict Test Room 2","containerType":"ROOM"}}]
             """.formatted(UUID.randomUUID()))
                 .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getLong("[0].entityId");
+                .extract().jsonPath().getString("[0].entityId");
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -64,45 +65,45 @@ public class CommandConflictTest {
     }
 
     /** Creates a fresh item in room1 and returns its id. */
-    private long createItem(String name) {
+    private String createItem(String name) {
         return postCommand("""
             [{"commandId":"%s","commandType":"ITEM_CREATE",
-              "payload":{"name":"%s","containerId":%d,"quantity":1}}]
+              "payload":{"name":"%s","containerId":"%s","quantity":1}}]
             """.formatted(UUID.randomUUID(), name, room1Id))
                 .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getLong("[0].entityId");
+                .extract().jsonPath().getString("[0].entityId");
     }
 
     /** Returns the current version of an item. */
-    private long itemVersion(long itemId) {
+    private long itemVersion(String itemId) {
         return given().get("/api/v1/items/" + itemId)
                 .then().statusCode(200)
                 .extract().jsonPath().getLong("version");
     }
 
     /** Creates a fresh SHELF inside room1 and returns its id. */
-    private long createShelf(String name) {
+    private String createShelf(String name) {
         return postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_CREATE",
-              "payload":{"name":"%s","containerType":"SHELF","parentContainerId":%d}}]
+              "payload":{"name":"%s","containerType":"SHELF","parentContainerId":"%s"}}]
             """.formatted(UUID.randomUUID(), name, room1Id))
                 .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getLong("[0].entityId");
+                .extract().jsonPath().getString("[0].entityId");
     }
 
     /** Returns the current version of a container. */
-    private long containerVersion(long containerId) {
+    private long containerVersion(String containerId) {
         return given().get("/api/v1/containers/" + containerId)
                 .then().statusCode(200)
                 .extract().jsonPath().getLong("version");
     }
 
     /** Advances an item's version by renaming it once with the current version. */
-    private long advanceItemVersion(long itemId, String newName) {
+    private long advanceItemVersion(String itemId, String newName) {
         long ver = itemVersion(itemId);
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"%s","quantity":1,"version":%d}}]
             """.formatted(UUID.randomUUID(), itemId, newName, ver))
                 .body("[0].status", is("APPLIED"));
@@ -110,11 +111,11 @@ public class CommandConflictTest {
     }
 
     /** Advances a container's version by renaming it once with the current version. */
-    private long advanceContainerVersion(long containerId, String newName) {
+    private long advanceContainerVersion(String containerId, String newName) {
         long ver = containerVersion(containerId);
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"%s","version":%d}}]
             """.formatted(UUID.randomUUID(), containerId, newName, ver))
                 .body("[0].status", is("APPLIED"));
@@ -127,12 +128,12 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_matchingVersion_applied() {
-        long id = createItem("Laptop");
+        String id = createItem("Laptop");
         long ver = itemVersion(id);
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Laptop Pro","quantity":1,"version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"))
@@ -141,13 +142,13 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_noVersion_applied_legacyBehavior() {
-        long id = createItem("Tablet");
+        String id = createItem("Tablet");
         advanceItemVersion(id, "Tablet Gen2");  // version is now 1+
 
         // No version field in payload → always applied (backward compat)
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Tablet Legacy","quantity":1}}]
             """.formatted(UUID.randomUUID(), id))
                 .body("[0].status", is("APPLIED"))
@@ -156,13 +157,13 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_staleVersion_conflictingName_conflict() {
-        long id = createItem("Monitor");
+        String id = createItem("Monitor");
         long staleVer = itemVersion(id);
         advanceItemVersion(id, "Monitor 4K");   // server advances to next version
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Monitor HD","quantity":1,"version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("CONFLICT"))
@@ -177,14 +178,14 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_staleVersion_autoMerge_allFieldsMatchServer_applied() {
-        long id = createItem("Keyboard");
+        String id = createItem("Keyboard");
         long staleVer = itemVersion(id);
         advanceItemVersion(id, "Keyboard Wireless");  // server name is now "Keyboard Wireless"
 
         // Client sends the server's current name with an old version → auto-merge
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Keyboard Wireless","quantity":1,"version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"))
@@ -193,13 +194,13 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_staleVersion_force_applied() {
-        long id = createItem("Mouse");
+        String id = createItem("Mouse");
         long staleVer = itemVersion(id);
         advanceItemVersion(id, "Mouse Wireless");
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Mouse Force","quantity":1,"version":%d,"force":true}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"))
@@ -208,14 +209,14 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_staleVersion_multipleConflictingFields() {
-        long id = createItem("Headphones");
+        String id = createItem("Headphones");
         long staleVer = itemVersion(id);
 
         // Server (Client A) changes BOTH name AND description in one command
         long ver = itemVersion(id);
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Headphones Pro","description":"Pro version","quantity":1,"version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -224,7 +225,7 @@ public class CommandConflictTest {
         // → both fields were also changed server-side → CONFLICT on both
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Headphones Cheap","description":"Billig","quantity":1,"version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("CONFLICT"))
@@ -234,14 +235,14 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_staleVersion_tagsConflict() {
-        long id = createItem("Speaker");
+        String id = createItem("Speaker");
         long staleVer = itemVersion(id);
 
         // Advance version and update tags on server
         long ver = itemVersion(id);
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Speaker","quantity":1,"tags":["Musik","Audio"],"version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -249,7 +250,7 @@ public class CommandConflictTest {
         // Client sends different tag set with stale version
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Speaker","quantity":1,"tags":["OldTag"],"version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("CONFLICT"))
@@ -258,13 +259,13 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_staleVersion_tagsAutoMerge_applied() {
-        long id = createItem("Webcam");
+        String id = createItem("Webcam");
         long ver = itemVersion(id);
 
         // Set tags with correct version
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Webcam","quantity":1,"tags":["Video","Stream"],"version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -274,7 +275,7 @@ public class CommandConflictTest {
         // Client sends same tags as server, stale version → auto-merge
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Webcam","quantity":1,"tags":["Video","Stream"],"version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"))
@@ -285,14 +286,14 @@ public class CommandConflictTest {
     void itemUpdate_conflict_doesNotPersistCommandRow() {
         // After a CONFLICT the command row must be deleted — submitting the same commandId again
         // must re-evaluate, not return a cached APPLIED result.
-        long id = createItem("Printer");
+        String id = createItem("Printer");
         long staleVer = itemVersion(id);
         advanceItemVersion(id, "Printer Pro");
 
         String fixedCommandId = UUID.randomUUID().toString();
         String conflictPayload = """
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Printer Old","quantity":1,"version":%d}}]
             """.formatted(fixedCommandId, id, staleVer);
 
@@ -309,12 +310,12 @@ public class CommandConflictTest {
 
     @Test
     void itemDelete_matchingVersion_applied() {
-        long id = createItem("USB Hub");
+        String id = createItem("USB Hub");
         long ver = itemVersion(id);
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_DELETE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -322,12 +323,12 @@ public class CommandConflictTest {
 
     @Test
     void itemDelete_noVersion_applied_legacyBehavior() {
-        long id = createItem("Extension Cord");
+        String id = createItem("Extension Cord");
         advanceItemVersion(id, "Extension Cord 2m");
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_DELETE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{}}]
             """.formatted(UUID.randomUUID(), id))
                 .body("[0].status", is("APPLIED"))
@@ -336,13 +337,13 @@ public class CommandConflictTest {
 
     @Test
     void itemDelete_staleVersion_conflict() {
-        long id = createItem("Power Strip");
+        String id = createItem("Power Strip");
         long staleVer = itemVersion(id);
         long serverVer = advanceItemVersion(id, "Power Strip Surge");
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_DELETE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("CONFLICT"))
@@ -354,13 +355,13 @@ public class CommandConflictTest {
 
     @Test
     void itemDelete_staleVersion_force_applied() {
-        long id = createItem("Battery");
+        String id = createItem("Battery");
         long staleVer = itemVersion(id);
         advanceItemVersion(id, "Battery AA");
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_DELETE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"version":%d,"force":true}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"));
@@ -372,25 +373,25 @@ public class CommandConflictTest {
 
     @Test
     void itemMove_matchingVersion_applied() {
-        long id = createItem("Charger");
+        String id = createItem("Charger");
         long ver = itemVersion(id);
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_MOVE",
-              "entityId":%d,
-              "payload":{"containerId":%d,"version":%d}}]
+              "entityId":"%s",
+              "payload":{"containerId":"%s","version":%d}}]
             """.formatted(UUID.randomUUID(), id, room2Id, ver))
                 .body("[0].status", is("APPLIED"));
     }
 
     @Test
     void itemMove_noVersion_applied_legacyBehavior() {
-        long id = createItem("Adapter");
+        String id = createItem("Adapter");
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_MOVE",
-              "entityId":%d,
-              "payload":{"containerId":%d}}]
+              "entityId":"%s",
+              "payload":{"containerId":"%s"}}]
             """.formatted(UUID.randomUUID(), id, room2Id))
                 .body("[0].status", is("APPLIED"))
                 .body("[0].conflictInfo", nullValue());
@@ -398,14 +399,14 @@ public class CommandConflictTest {
 
     @Test
     void itemMove_staleVersion_conflict() {
-        long id = createItem("Cable");
+        String id = createItem("Cable");
         long staleVer = itemVersion(id);
         advanceItemVersion(id, "Cable HDMI");
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_MOVE",
-              "entityId":%d,
-              "payload":{"containerId":%d,"version":%d}}]
+              "entityId":"%s",
+              "payload":{"containerId":"%s","version":%d}}]
             """.formatted(UUID.randomUUID(), id, room2Id, staleVer))
                 .body("[0].status", is("CONFLICT"))
                 .body("[0].conflictInfo.conflictingFields", empty())
@@ -414,14 +415,14 @@ public class CommandConflictTest {
 
     @Test
     void itemMove_staleVersion_force_applied() {
-        long id = createItem("Dock");
+        String id = createItem("Dock");
         long staleVer = itemVersion(id);
         advanceItemVersion(id, "Dock Thunderbolt");
 
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_MOVE",
-              "entityId":%d,
-              "payload":{"containerId":%d,"version":%d,"force":true}}]
+              "entityId":"%s",
+              "payload":{"containerId":"%s","version":%d,"force":true}}]
             """.formatted(UUID.randomUUID(), id, room2Id, staleVer))
                 .body("[0].status", is("APPLIED"));
     }
@@ -432,12 +433,12 @@ public class CommandConflictTest {
 
     @Test
     void containerUpdate_matchingVersion_applied() {
-        long id = createShelf("Shelf Alpha");
+        String id = createShelf("Shelf Alpha");
         long ver = containerVersion(id);
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Shelf Alpha Updated","version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"))
@@ -446,12 +447,12 @@ public class CommandConflictTest {
 
     @Test
     void containerUpdate_noVersion_applied_legacyBehavior() {
-        long id = createShelf("Shelf Beta");
+        String id = createShelf("Shelf Beta");
         advanceContainerVersion(id, "Shelf Beta v2");
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Shelf Beta Legacy"}}]
             """.formatted(UUID.randomUUID(), id))
                 .body("[0].status", is("APPLIED"))
@@ -460,13 +461,13 @@ public class CommandConflictTest {
 
     @Test
     void containerUpdate_staleVersion_conflictingName_conflict() {
-        long id = createShelf("Shelf Gamma");
+        String id = createShelf("Shelf Gamma");
         long staleVer = containerVersion(id);
         advanceContainerVersion(id, "Shelf Gamma v2");
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Shelf Gamma Old","version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("CONFLICT"))
@@ -477,14 +478,14 @@ public class CommandConflictTest {
 
     @Test
     void containerUpdate_staleVersion_autoMerge_applied() {
-        long id = createShelf("Shelf Delta");
+        String id = createShelf("Shelf Delta");
         long staleVer = containerVersion(id);
         advanceContainerVersion(id, "Shelf Delta v2");
 
         // Client sends the server's current name → auto-merge
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Shelf Delta v2","version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"))
@@ -493,13 +494,13 @@ public class CommandConflictTest {
 
     @Test
     void containerUpdate_staleVersion_force_applied() {
-        long id = createShelf("Shelf Epsilon");
+        String id = createShelf("Shelf Epsilon");
         long staleVer = containerVersion(id);
         advanceContainerVersion(id, "Shelf Epsilon v2");
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Shelf Epsilon Force","version":%d,"force":true}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"))
@@ -512,12 +513,12 @@ public class CommandConflictTest {
 
     @Test
     void containerDelete_matchingVersion_applied() {
-        long id = createShelf("Shelf Delete Match");
+        String id = createShelf("Shelf Delete Match");
         long ver = containerVersion(id);
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_DELETE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -525,12 +526,12 @@ public class CommandConflictTest {
 
     @Test
     void containerDelete_noVersion_applied_legacyBehavior() {
-        long id = createShelf("Shelf Delete Legacy");
+        String id = createShelf("Shelf Delete Legacy");
         advanceContainerVersion(id, "Shelf Delete Legacy v2");
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_DELETE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{}}]
             """.formatted(UUID.randomUUID(), id))
                 .body("[0].status", is("APPLIED"))
@@ -539,13 +540,13 @@ public class CommandConflictTest {
 
     @Test
     void containerDelete_staleVersion_conflict() {
-        long id = createShelf("Shelf Delete Stale");
+        String id = createShelf("Shelf Delete Stale");
         long staleVer = containerVersion(id);
         long serverVer = advanceContainerVersion(id, "Shelf Delete Stale v2");
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_DELETE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("CONFLICT"))
@@ -557,13 +558,13 @@ public class CommandConflictTest {
 
     @Test
     void containerDelete_staleVersion_force_applied() {
-        long id = createShelf("Shelf Delete Force");
+        String id = createShelf("Shelf Delete Force");
         long staleVer = containerVersion(id);
         advanceContainerVersion(id, "Shelf Delete Force v2");
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_DELETE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"version":%d,"force":true}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"));
@@ -575,25 +576,25 @@ public class CommandConflictTest {
 
     @Test
     void containerMove_matchingVersion_applied() {
-        long id = createShelf("Shelf Move Match");
+        String id = createShelf("Shelf Move Match");
         long ver = containerVersion(id);
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_MOVE",
-              "entityId":%d,
-              "payload":{"newParentContainerId":%d,"version":%d}}]
+              "entityId":"%s",
+              "payload":{"newParentContainerId":"%s","version":%d}}]
             """.formatted(UUID.randomUUID(), id, room2Id, ver))
                 .body("[0].status", is("APPLIED"));
     }
 
     @Test
     void containerMove_noVersion_applied_legacyBehavior() {
-        long id = createShelf("Shelf Move Legacy");
+        String id = createShelf("Shelf Move Legacy");
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_MOVE",
-              "entityId":%d,
-              "payload":{"newParentContainerId":%d}}]
+              "entityId":"%s",
+              "payload":{"newParentContainerId":"%s"}}]
             """.formatted(UUID.randomUUID(), id, room2Id))
                 .body("[0].status", is("APPLIED"))
                 .body("[0].conflictInfo", nullValue());
@@ -601,14 +602,14 @@ public class CommandConflictTest {
 
     @Test
     void containerMove_staleVersion_conflict() {
-        long id = createShelf("Shelf Move Stale");
+        String id = createShelf("Shelf Move Stale");
         long staleVer = containerVersion(id);
         advanceContainerVersion(id, "Shelf Move Stale v2");
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_MOVE",
-              "entityId":%d,
-              "payload":{"newParentContainerId":%d,"version":%d}}]
+              "entityId":"%s",
+              "payload":{"newParentContainerId":"%s","version":%d}}]
             """.formatted(UUID.randomUUID(), id, room2Id, staleVer))
                 .body("[0].status", is("CONFLICT"))
                 .body("[0].conflictInfo.conflictingFields", empty())
@@ -617,14 +618,14 @@ public class CommandConflictTest {
 
     @Test
     void containerMove_staleVersion_force_applied() {
-        long id = createShelf("Shelf Move Force");
+        String id = createShelf("Shelf Move Force");
         long staleVer = containerVersion(id);
         advanceContainerVersion(id, "Shelf Move Force v2");
 
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_MOVE",
-              "entityId":%d,
-              "payload":{"newParentContainerId":%d,"version":%d,"force":true}}]
+              "entityId":"%s",
+              "payload":{"newParentContainerId":"%s","version":%d,"force":true}}]
             """.formatted(UUID.randomUUID(), id, room2Id, staleVer))
                 .body("[0].status", is("APPLIED"));
     }
@@ -637,7 +638,7 @@ public class CommandConflictTest {
     void itemCreate_noConflictCheck_alwaysApplied() {
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_CREATE",
-              "payload":{"name":"New Item No Conflict","containerId":%d,"quantity":1}}]
+              "payload":{"name":"New Item No Conflict","containerId":"%s","quantity":1}}]
             """.formatted(UUID.randomUUID(), room1Id))
                 .body("[0].status", is("APPLIED"))
                 .body("[0].conflictInfo", nullValue());
@@ -648,7 +649,7 @@ public class CommandConflictTest {
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_CREATE",
               "payload":{"name":"New Container No Conflict","containerType":"SHELF",
-                         "parentContainerId":%d}}]
+                         "parentContainerId":"%s"}}]
             """.formatted(UUID.randomUUID(), room1Id))
                 .body("[0].status", is("APPLIED"))
                 .body("[0].conflictInfo", nullValue());
@@ -660,14 +661,14 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_serverChangedName_clientChangedDescription_autoMerge() {
-        long id = createItem("Widget");
+        String id = createItem("Widget");
         long staleVer = itemVersion(id);
 
         // Client A (server-side): only changes name
         long ver = itemVersion(id);
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Widget Pro","version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -675,7 +676,7 @@ public class CommandConflictTest {
         // Client B (offline, stale): only changes description — non-overlapping with Client A
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"description":"Client B description","version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"))
@@ -692,14 +693,14 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_serverChangedName_clientChangedSameName_conflict() {
-        long id = createItem("Gadget");
+        String id = createItem("Gadget");
         long staleVer = itemVersion(id);
 
         // Server (Client A): renames item
         long ver = itemVersion(id);
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Gadget Pro","version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -707,7 +708,7 @@ public class CommandConflictTest {
         // Client B: also renames item to something different — overlap on "name"
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Gadget Max","version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("CONFLICT"))
@@ -716,14 +717,14 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_serverChangedName_clientChangedDescriptionAndName_onlyNameConflicts() {
-        long id = createItem("Tool");
+        String id = createItem("Tool");
         long staleVer = itemVersion(id);
 
         // Server: renames item
         long ver = itemVersion(id);
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Tool Pro","version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -733,7 +734,7 @@ public class CommandConflictTest {
         // is still blocked because name conflicts
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Tool Max","description":"My description","version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("CONFLICT"))
@@ -742,14 +743,14 @@ public class CommandConflictTest {
 
     @Test
     void itemUpdate_serverChangedMultipleFields_clientChangedDisjointField_autoMerge() {
-        long id = createItem("Device");
+        String id = createItem("Device");
         long staleVer = itemVersion(id);
 
         // Server (Client A): changes name and position — two fields
         long ver = itemVersion(id);
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Device Pro","position":"Shelf 3","version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -757,7 +758,7 @@ public class CommandConflictTest {
         // Client B (stale): changes only barcode — completely disjoint from server changes
         postCommand("""
             [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"barcode":"DEV-001","version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"))
@@ -769,14 +770,14 @@ public class CommandConflictTest {
 
     @Test
     void containerUpdate_serverChangedName_clientChangedDescription_autoMerge() {
-        long id = createShelf("Container Widget");
+        String id = createShelf("Container Widget");
         long staleVer = containerVersion(id);
 
         // Client A (server-side): only changes name
         long ver = containerVersion(id);
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Container Widget Pro","version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -784,7 +785,7 @@ public class CommandConflictTest {
         // Client B (offline, stale): only changes description — non-overlapping
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"description":"Client B desc","version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("APPLIED"))
@@ -801,14 +802,14 @@ public class CommandConflictTest {
 
     @Test
     void containerUpdate_serverChangedName_clientChangedSameName_conflict() {
-        long id = createShelf("Container Gadget");
+        String id = createShelf("Container Gadget");
         long staleVer = containerVersion(id);
 
         // Server: renames container
         long ver = containerVersion(id);
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Container Gadget Pro","version":%d}}]
             """.formatted(UUID.randomUUID(), id, ver))
                 .body("[0].status", is("APPLIED"));
@@ -816,7 +817,7 @@ public class CommandConflictTest {
         // Client B: also renames to something different — overlap on "name"
         postCommand("""
             [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":%d,
+              "entityId":"%s",
               "payload":{"name":"Container Gadget Max","version":%d}}]
             """.formatted(UUID.randomUUID(), id, staleVer))
                 .body("[0].status", is("CONFLICT"))

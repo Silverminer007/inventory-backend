@@ -134,7 +134,7 @@ public class CommandService {
         command.status = CommandStatus.APPLIED;
         command.appliedAt = Instant.now();
         if (snapshot != null) {
-            Long entityId = extractEntityId(snapshot);
+            UUID entityId = extractEntityId(snapshot);
             if (entityId != null) command.entityId = entityId;
         }
         commandRepository.persist(command);
@@ -173,13 +173,12 @@ public class CommandService {
         return result;
     }
 
-    private Long extractEntityId(Object snapshot) {
+    private UUID extractEntityId(Object snapshot) {
         if (snapshot == null) return null;
         try {
             var field = snapshot.getClass().getField("id");
             Object val = field.get(snapshot);
-            if (val instanceof Long l) return l;
-            if (val instanceof Number n) return n.longValue();
+            if (val instanceof UUID u) return u;
         } catch (NoSuchFieldException | IllegalAccessException ignored) {
         }
         return null;

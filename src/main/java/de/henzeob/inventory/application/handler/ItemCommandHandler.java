@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 @ApplicationScoped
 public class ItemCommandHandler {
@@ -47,9 +48,10 @@ public class ItemCommandHandler {
 
     private ItemDTO handleCreate(Map<String, Object> p, String userId) {
         ItemDTO dto = new ItemDTO();
+        dto.id = toUUID(p.get("id")); // optional client-provided UUID
         dto.name = required(p, "name");
         dto.description = (String) p.get("description");
-        dto.containerId = toLong(p.get("containerId"));
+        dto.containerId = toUUID(p.get("containerId"));
         dto.position = (String) p.get("position");
         dto.quantity = p.get("quantity") != null ? toInteger(p.get("quantity")) : 1;
         dto.barcode = (String) p.get("barcode");
@@ -61,7 +63,7 @@ public class ItemCommandHandler {
         return itemService.createItem(dto, userId);
     }
 
-    private Object handleUpdate(Long entityId, Map<String, Object> p, String userId) {
+    private Object handleUpdate(UUID entityId, Map<String, Object> p, String userId) {
         Long clientVersion = toLong(p.get("version"));
         boolean force = Boolean.TRUE.equals(p.get("force"));
 
@@ -72,9 +74,6 @@ public class ItemCommandHandler {
             return applyUpdate(entityId, p, userId);
         }
 
-        // Stale version: 3-way merge using server command history to determine
-        // which fields the server changed between clientVersion and current version.
-        // A field is a conflict only if BOTH the client and server changed it.
         long versionGap = item.version - clientVersion;
         Set<String> serverChanged = serverChangedItemFields(entityId, versionGap);
 
@@ -105,7 +104,7 @@ public class ItemCommandHandler {
         if (p.containsKey("tags")) {
             Set<String> clientTags = extractTags(p);
             Set<String> serverTags = itemMapper.toDTO(item).tags;
-            if (!Objects.equals(clientTags, serverTags) && serverChanged.contains("tags")) {
+            if (!Objects.equals(clientTags, serverTags)) {
                 conflictingFields.add("tags");
             }
         }
@@ -120,8 +119,7 @@ public class ItemCommandHandler {
             return new ConflictResult.Conflicted(info);
         }
 
-        // Auto-merge: no field-level conflicts.
-        // Apply the client's changes on top of the current server state.
+        // Auto-merge
         ItemDTO overlayDto = itemMapper.toDTO(item);
         if (p.containsKey("name"))        overlayDto.name = (String) p.get("name");
         if (p.containsKey("description")) overlayDto.description = (String) p.get("description");
@@ -132,12 +130,7 @@ public class ItemCommandHandler {
         return itemService.updateItem(entityId, overlayDto, userId);
     }
 
-    /**
-     * Queries the {@code limit} most recently applied commands for this entity and
-     * returns the set of payload field names that appear in ITEM_UPDATE commands
-     * (excluding meta-fields). These represent fields the server changed server-side.
-     */
-    private Set<String> serverChangedItemFields(Long entityId, long versionGap) {
+    private Set<String> serverChangedItemFields(UUID entityId, long versionGap) {
         if (versionGap <= 0) return Set.of();
         List<Command> recent = commandRepository.findRecentApplied(
                 entityId, "ITEM", (int) Math.min(versionGap, 100));
@@ -153,7 +146,7 @@ public class ItemCommandHandler {
         return changed;
     }
 
-    private ItemDTO applyUpdate(Long entityId, Map<String, Object> p, String userId) {
+    private ItemDTO applyUpdate(UUID entityId, Map<String, Object> p, String userId) {
         ItemDTO dto = new ItemDTO();
         dto.id = entityId;
         dto.name = (String) p.get("name");
@@ -170,7 +163,7 @@ public class ItemCommandHandler {
         return itemService.updateItem(entityId, dto, userId);
     }
 
-    private Object handleDelete(Long entityId, String userId, Map<String, Object> p) {
+    private Object handleDelete(UUID entityId, String userId, Map<String, Object> p) {
         Long clientVersion = toLong(p.get("version"));
         boolean force = Boolean.TRUE.equals(p.get("force"));
 
@@ -192,7 +185,7 @@ public class ItemCommandHandler {
         return null;
     }
 
-    private Object handleMove(Long entityId, Map<String, Object> p, String userId) {
+    private Object handleMove(UUID entityId, Map<String, Object> p, String userId) {
         Long clientVersion = toLong(p.get("version"));
         boolean force = Boolean.TRUE.equals(p.get("force"));
 
@@ -210,7 +203,7 @@ public class ItemCommandHandler {
             }
         }
 
-        Long containerId = toLong(required(p, "containerId"));
+        UUID containerId = toUUID(required(p, "containerId"));
         return itemService.moveItem(entityId, userId, containerId);
     }
 
@@ -227,6 +220,12 @@ public class ItemCommandHandler {
         if (val == null) throw new IllegalArgumentException("Missing required payload field: " + key);
         //noinspection unchecked
         return (T) val;
+    }
+
+    private UUID toUUID(Object val) {
+        if (val == null) return null;
+        if (val instanceof UUID u) return u;
+        return UUID.fromString(val.toString());
     }
 
     private Long toLong(Object val) {

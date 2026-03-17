@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @ApplicationScoped
 public class ContainerRepository implements PanacheRepository<Container> {
@@ -26,7 +27,7 @@ public class ContainerRepository implements PanacheRepository<Container> {
                 Sort.by("name"), likeQuery, userId);
     }
 
-    public Optional<Container> findByIdAndUser(Long id, String userId) {
+    public Optional<Container> findByIdAndUser(UUID id, String userId) {
         return find("id = ?1 and userId = ?2", id, userId).firstResultOptional();
     }
 
@@ -38,7 +39,7 @@ public class ContainerRepository implements PanacheRepository<Container> {
         return list("parentContainer is null and userId = ?1", Sort.by("name"), userId);
     }
 
-    public List<Container> findByParentAndUser(Long parentId, String userId) {
+    public List<Container> findByParentAndUser(UUID parentId, String userId) {
         return list("parentContainer.id = ?1 and userId = ?2", Sort.by("name"), parentId, userId);
     }
 
@@ -46,7 +47,7 @@ public class ContainerRepository implements PanacheRepository<Container> {
      * Find all descendant container IDs using a recursive CTE.
      */
     @SuppressWarnings("unchecked")
-    public List<Long> findAllDescendantIds(Long containerId, String userId) {
+    public List<UUID> findAllDescendantIds(UUID containerId, String userId) {
         return getEntityManager()
                 .createNativeQuery("""
                     WITH RECURSIVE descendants AS (
@@ -56,7 +57,7 @@ public class ContainerRepository implements PanacheRepository<Container> {
                         JOIN descendants d ON c.parent_container_id = d.id
                     )
                     SELECT id FROM descendants
-                """)
+                """, UUID.class)
                 .setParameter("containerId", containerId)
                 .setParameter("userId", userId)
                 .getResultList();

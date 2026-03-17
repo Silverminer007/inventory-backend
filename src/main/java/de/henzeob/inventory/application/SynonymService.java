@@ -12,6 +12,7 @@ import jakarta.ws.rs.NotFoundException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -38,7 +39,7 @@ public class SynonymService {
     }
 
     @Transactional
-    public void deleteSynonym(Long id, String userId) {
+    public void deleteSynonym(UUID id, String userId) {
         Synonym synonym = synonymRepository.findByIdAndUser(id, userId)
                 .orElseThrow(() -> new NotFoundException("Synonym nicht gefunden"));
 

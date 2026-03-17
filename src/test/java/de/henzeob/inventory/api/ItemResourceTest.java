@@ -1,7 +1,7 @@
 package de.henzeob.inventory.api;
 
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
@@ -20,10 +20,11 @@ import static org.hamcrest.Matchers.not;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class ItemResourceTest {
 
-    private Long containerId;
+    private String containerId;
 
-    @BeforeAll
+    @BeforeEach
     void setupContainer() {
+        if (containerId != null) return;
         String command = """
             [{
                 "commandId": "%s",
@@ -42,7 +43,7 @@ public class ItemResourceTest {
                 .then()
                 .statusCode(200)
                 .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getLong("[0].entityId");
+                .extract().jsonPath().getString("[0].entityId");
     }
 
     @Test
@@ -98,7 +99,7 @@ public class ItemResourceTest {
                 "payload": {
                     "name": "Roter Laptop",
                     "description": "Ein roter Laptop",
-                    "containerId": %d,
+                    "containerId": "%s",
                     "quantity": 1
                 }
             }]
@@ -125,7 +126,7 @@ public class ItemResourceTest {
                 "payload": {
                     "name": "Kleiner roter Laptop",
                     "description": "Ein kleiner roter Laptop",
-                    "containerId": %d,
+                    "containerId": "%s",
                     "quantity": 1
                 }
             }]
@@ -150,13 +151,13 @@ public class ItemResourceTest {
                 "commandType": "ITEM_CREATE",
                 "payload": {
                     "name": "Laptop",
-                    "containerId": %d,
+                    "containerId": "%s",
                     "quantity": 1
                 }
             }]
         """.formatted(UUID.randomUUID(), containerId);
 
-        Long itemId = given()
+        String itemId = given()
                 .contentType("application/json")
                 .body(createCommand)
                 .when().post("/commands")
@@ -164,7 +165,7 @@ public class ItemResourceTest {
                 .statusCode(200)
                 .body("[0].status", is("APPLIED"))
                 .body("[0].snapshot.tags", hasItem("Technik"))
-                .extract().jsonPath().getLong("[0].entityId");
+                .extract().jsonPath().getString("[0].entityId");
 
         // Update: keep "Technik" and add two more tags
         // First get current version
@@ -178,7 +179,7 @@ public class ItemResourceTest {
             [{
                 "commandId": "%s",
                 "commandType": "ITEM_UPDATE",
-                "entityId": %d,
+                "entityId": "%s",
                 "payload": {
                     "name": "Laptop",
                     "quantity": 1,
@@ -214,13 +215,13 @@ public class ItemResourceTest {
                 "commandType": "ITEM_CREATE",
                 "payload": {
                     "name": "Kleiner roter Laptop",
-                    "containerId": %d,
+                    "containerId": "%s",
                     "quantity": 1
                 }
             }]
         """.formatted(UUID.randomUUID(), containerId);
 
-        Long itemId = given()
+        String itemId = given()
                 .contentType("application/json")
                 .body(createCommand)
                 .when().post("/commands")
@@ -229,7 +230,7 @@ public class ItemResourceTest {
                 .body("[0].status", is("APPLIED"))
                 .body("[0].snapshot.tags", hasSize(3))
                 .body("[0].snapshot.tags", hasItems("Technik", "Klein", "Farbe: Rot"))
-                .extract().jsonPath().getLong("[0].entityId");
+                .extract().jsonPath().getString("[0].entityId");
 
         // Get current version
         Long version = given()
@@ -243,7 +244,7 @@ public class ItemResourceTest {
             [{
                 "commandId": "%s",
                 "commandType": "ITEM_UPDATE",
-                "entityId": %d,
+                "entityId": "%s",
                 "payload": {
                     "name": "Kleiner roter Laptop",
                     "quantity": 1,

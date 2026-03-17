@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.UUID;
 
 @Path("/api/v1/containers")
 @Produces(MediaType.APPLICATION_JSON)
@@ -66,7 +67,7 @@ public class ContainerResource {
     @Path("/{id}")
     @Operation(summary = "Get container by ID")
     public Response getContainer(
-            @Parameter(description = "Container ID") @PathParam("id") Long id
+            @Parameter(description = "Container ID") @PathParam("id") UUID id
     ) {
         ContainerDTO container = containerService.getContainerDTO(id, getCurrentUserId());
         return Response.ok(container).build();
@@ -76,7 +77,7 @@ public class ContainerResource {
     @Path("/{id}/children")
     @Operation(summary = "Get child containers")
     public Response getChildContainers(
-            @Parameter(description = "Parent container ID") @PathParam("id") Long id
+            @Parameter(description = "Parent container ID") @PathParam("id") UUID id
     ) {
         List<ContainerDTO> children = containerService.getChildContainers(id, getCurrentUserId());
         return Response.ok(children).build();
@@ -85,7 +86,7 @@ public class ContainerResource {
     @GET
     @Path("/{id}/images")
     @Operation(summary = "Get images for container")
-    public Response getImagesForContainer(@PathParam("id") Long id) {
+    public Response getImagesForContainer(@PathParam("id") UUID id) {
         List<ImageDTO> images = imageService.getImagesForContainer(id, getCurrentUserId());
         return Response.ok(images).build();
     }
@@ -95,7 +96,7 @@ public class ContainerResource {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Operation(summary = "Upload image for container")
     public Response uploadImageForContainer(
-            @PathParam("id") Long id,
+            @PathParam("id") UUID id,
             @RestForm("file") FileUpload file,
             @RestForm("primary") @DefaultValue("false") boolean isPrimary
     ) throws IOException {

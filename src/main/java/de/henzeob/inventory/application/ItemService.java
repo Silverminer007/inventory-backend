@@ -11,14 +11,17 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.hibernate.search.engine.search.sort.dsl.TypedSearchSortFactory;
 import org.hibernate.search.mapper.orm.Search;
 import org.hibernate.search.mapper.orm.session.SearchSession;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -45,38 +48,28 @@ public class ItemService {
     @Inject
     EntityManager entityManager;
 
-    /**
-     * Get all items for a user
-     */
+    @ConfigProperty(name = "quarkus.hibernate-search-orm.active", defaultValue = "true")
+    boolean hibernateSearchActive;
+
     public List<ItemDTO> getAllItems(String userId) {
         return itemRepository.findByUser(userId).stream().map(itemMapper::toDTO).collect(Collectors.toList());
     }
 
-    /**
-     * Get item by ID
-     */
-    public ItemDTO getItem(Long id, String userId) {
+    public ItemDTO getItem(UUID id, String userId) {
         Item item = itemRepository.findByIdAndUser(id, userId).orElseThrow(() -> new NotFoundException("Item nicht gefunden"));
-
         return itemMapper.toDTOWithContainer(item);
     }
 
-    /**
-     * Create new item
-     */
     @Transactional
     public ItemDTO createItem(ItemDTO dto, String userId) {
         Item item = new Item();
         item.userId = userId;
+        if (dto.id != null) item.id = dto.id;
 
         itemMapper.updateEntity(item, dto);
-
-        // Set location
         setLocation(item, dto.containerId, userId);
-
         itemRepository.persist(item);
 
-        // Auto-tagging
         if (dto.tags == null || dto.tags.isEmpty()) {
             Set<ItemTag> autoTags = taggingService.generateTags(dto.name, dto.description);
             for (ItemTag tag : autoTags) {
@@ -95,20 +88,17 @@ public class ItemService {
             }
         }
 
-        // Auto-generate synonyms
         synonymGenerationService.generateSynonyms(item.name, userId);
 
         return itemMapper.toDTO(item);
     }
 
-    /**
-     * Update item
-     */
     @Transactional
-    public ItemDTO updateItem(Long id, ItemDTO dto, String userId) {
+    public ItemDTO updateItem(UUID id, ItemDTO dto, String userId) {
         Item item = itemRepository.findByIdAndUser(id, userId).orElseThrow(() -> new NotFoundException("Item nicht gefunden"));
 
         itemMapper.updateEntity(item, dto);
+        item.lastModified = LocalDateTime.now();
 
         List<ItemTag> oldItemTags = ItemTag.find("item.id = ?1", dto.id).list();
 
@@ -133,11 +123,8 @@ public class ItemService {
         return itemMapper.toDTO(item);
     }
 
-    /**
-     * Move item to different container
-     */
     @Transactional
-    public ItemDTO moveItem(Long id, String userId, Long containerId) {
+    public ItemDTO moveItem(UUID id, String userId, UUID containerId) {
         Item item = itemRepository.findByIdAndUser(id, userId).orElseThrow(() -> new NotFoundException("Item nicht gefunden"));
 
         Container container = containerService.getContainer(containerId, userId);
@@ -148,30 +135,29 @@ public class ItemService {
         return itemMapper.toDTO(item);
     }
 
-    /**
-     * Delete item
-     */
     @Transactional
-    public void deleteItem(Long id, String userId) {
+    public void deleteItem(UUID id, String userId) {
         Item item = itemRepository.findByIdAndUser(id, userId).orElseThrow(() -> new NotFoundException("Item nicht gefunden"));
-
         itemRepository.delete(item);
     }
 
-    /**
-     * Search items via Elasticsearch
-     */
     public List<ItemDTO> searchItems(String query, List<String> tags, String userId) {
+        if (!hibernateSearchActive) {
+            return itemRepository.findByUser(userId).stream()
+                    .filter(item -> query == null || query.isBlank()
+                            || item.name.toLowerCase().contains(query.toLowerCase())
+                            || (item.description != null && item.description.toLowerCase().contains(query.toLowerCase())))
+                    .map(itemMapper::toDTO)
+                    .collect(Collectors.toList());
+        }
         SearchSession searchSession = Search.session(entityManager);
 
         List<Item> hits = searchSession.search(Item.class)
                 .where(f -> {
                     var bool = f.bool();
 
-                    // Always scope to the current user
                     bool.must(f.match().field("userId").matching(userId));
 
-                    // Full-text search across all relevant fields
                     if (query != null && !query.isBlank()) {
                         bool.must(f.bool()
                                 .should(f.match()
@@ -188,7 +174,6 @@ public class ItemService {
                         );
                     }
 
-                    // Tag intersection: at least one supplied tag must be present on the item
                     if (tags != null && !tags.isEmpty()) {
                         var tagBool = f.bool();
                         for (String tag : tags) {
@@ -205,16 +190,10 @@ public class ItemService {
         return hits.stream().map(itemMapper::toDTO).collect(Collectors.toList());
     }
 
-    /**
-     * Get items by tag
-     */
     public List<ItemDTO> getItemsByTag(String tag, String userId) {
         return itemRepository.findByTag(tag, userId).stream().map(itemMapper::toDTO).collect(Collectors.toList());
     }
 
-    /**
-     * Get all distinct tags for a user, optionally filtered by prefix
-     */
     public List<String> getDistinctTags(String userId, String prefix) {
         List<String> tags = itemRepository.findDistinctTagsByUser(userId);
         if (prefix != null && !prefix.isBlank()) {
@@ -224,13 +203,11 @@ public class ItemService {
         return tags;
     }
 
-    // Helper methods
-    private void setLocation(Item item, Long containerId, String userId) {
+    private void setLocation(Item item, UUID containerId, String userId) {
         if (containerId == null) {
             throw new IllegalArgumentException("Item muss einen Standort haben");
         }
         Container container = containerService.getContainer(containerId, userId);
         item.container = container;
     }
-
 }

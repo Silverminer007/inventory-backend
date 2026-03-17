@@ -5,10 +5,11 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 public class ContainerDTO {
 
-    public Long id;
+    public UUID id;
 
     @NotBlank(message = "Name darf nicht leer sein")
     public String name;
@@ -24,7 +25,7 @@ public class ContainerDTO {
     public String position;
     public String qrCode;
 
-    public Long parentContainerId;
+    public UUID parentContainerId;
 
     // Metadata
     public LocalDateTime lastModified;
@@ -41,7 +42,7 @@ public class ContainerDTO {
     public ParentInfo parent;
 
     public static class ParentInfo {
-        public Long id;
+        public UUID id;
         public String name;
         public String containerType;
     }

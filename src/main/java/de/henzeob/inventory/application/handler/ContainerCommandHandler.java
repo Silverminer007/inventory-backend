@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 @ApplicationScoped
 public class ContainerCommandHandler {
@@ -47,6 +48,7 @@ public class ContainerCommandHandler {
 
     private ContainerDTO handleCreate(Map<String, Object> p, String userId) {
         Container container = new Container();
+        if (p.get("id") != null) container.id = toUUID(p.get("id")); // optional client-provided UUID
         container.name = required(p, "name");
         container.description = (String) p.get("description");
         container.containerType = ContainerType.valueOf(required(p, "containerType").toString());
@@ -55,12 +57,12 @@ public class ContainerCommandHandler {
             container.locationType = Container.LocationType.valueOf(p.get("locationType").toString());
         }
         container.location = (String) p.get("location");
-        Long parentId = toLong(p.get("parentContainerId"));
+        UUID parentId = toUUID(p.get("parentContainerId"));
         Container created = containerService.createContainer(container, parentId, userId);
         return containerMapper.toDTO(created);
     }
 
-    private Object handleUpdate(Long entityId, Map<String, Object> p, String userId) {
+    private Object handleUpdate(UUID entityId, Map<String, Object> p, String userId) {
         Long clientVersion = toLong(p.get("version"));
         boolean force = Boolean.TRUE.equals(p.get("force"));
 
@@ -71,7 +73,6 @@ public class ContainerCommandHandler {
             return applyUpdate(entityId, p, userId);
         }
 
-        // Stale version: 3-way merge using server command history.
         long versionGap = container.version - clientVersion;
         Set<String> serverChanged = serverChangedContainerFields(entityId, versionGap);
 
@@ -111,7 +112,7 @@ public class ContainerCommandHandler {
             return new ConflictResult.Conflicted(info);
         }
 
-        // Auto-merge: apply client's changes on top of current server state.
+        // Auto-merge
         ContainerDTO overlayDto = containerMapper.toDTO(container);
         if (p.containsKey("name"))         overlayDto.name = (String) p.get("name");
         if (p.containsKey("description"))  overlayDto.description = (String) p.get("description");
@@ -121,11 +122,7 @@ public class ContainerCommandHandler {
         return containerService.updateContainer(entityId, overlayDto, userId);
     }
 
-    /**
-     * Returns the set of payload field names found in CONTAINER_UPDATE commands applied
-     * within the last {@code versionGap} modifications for this entity.
-     */
-    private Set<String> serverChangedContainerFields(Long entityId, long versionGap) {
+    private Set<String> serverChangedContainerFields(UUID entityId, long versionGap) {
         if (versionGap <= 0) return Set.of();
         List<Command> recent = commandRepository.findRecentApplied(
                 entityId, "CONTAINER", (int) Math.min(versionGap, 100));
@@ -141,7 +138,7 @@ public class ContainerCommandHandler {
         return changed;
     }
 
-    private ContainerDTO applyUpdate(Long entityId, Map<String, Object> p, String userId) {
+    private ContainerDTO applyUpdate(UUID entityId, Map<String, Object> p, String userId) {
         ContainerDTO dto = new ContainerDTO();
         dto.name = (String) p.get("name");
         dto.description = (String) p.get("description");
@@ -152,7 +149,7 @@ public class ContainerCommandHandler {
         return containerService.updateContainer(entityId, dto, userId);
     }
 
-    private Object handleDelete(Long entityId, String userId, Map<String, Object> p) {
+    private Object handleDelete(UUID entityId, String userId, Map<String, Object> p) {
         Long clientVersion = toLong(p.get("version"));
         boolean force = Boolean.TRUE.equals(p.get("force"));
 
@@ -174,7 +171,7 @@ public class ContainerCommandHandler {
         return null;
     }
 
-    private Object handleMove(Long entityId, Map<String, Object> p, String userId) {
+    private Object handleMove(UUID entityId, Map<String, Object> p, String userId) {
         Long clientVersion = toLong(p.get("version"));
         boolean force = Boolean.TRUE.equals(p.get("force"));
 
@@ -192,7 +189,7 @@ public class ContainerCommandHandler {
             }
         }
 
-        Long newParentId = toLong(p.get("newParentContainerId"));
+        UUID newParentId = toUUID(p.get("newParentContainerId"));
         Container moved = containerService.moveContainer(entityId, newParentId, userId);
         return containerMapper.toDTOWithChildren(moved);
     }
@@ -202,6 +199,12 @@ public class ContainerCommandHandler {
         Object val = p.get(key);
         if (val == null) throw new IllegalArgumentException("Missing required payload field: " + key);
         return (T) val;
+    }
+
+    private UUID toUUID(Object val) {
+        if (val == null) return null;
+        if (val instanceof UUID u) return u;
+        return UUID.fromString(val.toString());
     }
 
     private Long toLong(Object val) {

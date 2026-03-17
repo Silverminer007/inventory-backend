@@ -9,7 +9,7 @@ public class CommandLogDTO {
     public String commandType;
     public Integer payloadVersion;
     public String entityType;
-    public Long entityId;
+    public UUID entityId;
     public Map<String, Object> payload;
     public String clientId;
     public Long clientSequence;

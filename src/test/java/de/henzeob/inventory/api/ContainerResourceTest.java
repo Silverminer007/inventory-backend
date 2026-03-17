@@ -58,7 +58,7 @@ public class ContainerResourceTest {
             [{
                 "commandId": "%s",
                 "commandType": "CONTAINER_DELETE",
-                "entityId": 999999,
+                "entityId": "00000000-0000-0000-0000-000000000000",
                 "payload": {
                     "version": 0
                 }
