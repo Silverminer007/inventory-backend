@@ -30,10 +30,6 @@ public class ItemService {
 
     @Inject
     ContainerService containerService;
-
-    @Inject
-    SynonymService synonymService;
-
     @Inject
     SynonymGenerationService synonymGenerationService;
     @ConfigProperty(name = "quarkus.hibernate-search-orm.active", defaultValue = "true")
@@ -75,9 +71,6 @@ public class ItemService {
                 item.tags.add(tag);
             }
         }
-
-        synonymGenerationService.generateSynonyms(item.name, userId);
-
         return itemMapper.toDTO(item);
     }
 

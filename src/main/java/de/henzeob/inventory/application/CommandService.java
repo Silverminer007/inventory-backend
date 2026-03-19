@@ -4,7 +4,6 @@ import de.henzeob.inventory.application.handler.ContainerCommandHandler;
 import de.henzeob.inventory.application.handler.ConflictResult;
 import de.henzeob.inventory.application.handler.ImageCommandHandler;
 import de.henzeob.inventory.application.handler.ItemCommandHandler;
-import de.henzeob.inventory.application.handler.SynonymCommandHandler;
 import de.henzeob.inventory.model.dto.CommandDTO;
 import de.henzeob.inventory.model.dto.CommandResultDTO;
 import de.henzeob.inventory.model.entity.Command;
@@ -39,9 +38,6 @@ public class CommandService {
 
     @Inject
     ImageCommandHandler imageCommandHandler;
-
-    @Inject
-    SynonymCommandHandler synonymCommandHandler;
 
     public List<CommandResultDTO> processBatch(List<CommandDTO> commands, String userId) {
         List<CommandResultDTO> results = new ArrayList<>();
@@ -119,14 +115,14 @@ public class CommandService {
         }
 
         // Handle CONFLICT — delete the pending row (no state changed) and return CONFLICT DTO
-        if (snapshot instanceof ConflictResult.Conflicted conflicted) {
+        if (snapshot instanceof ConflictResult.Conflicted(ConflictResult.ConflictInfo info)) {
             commandRepository.delete(command);
             CommandResultDTO result = new CommandResultDTO();
             result.commandId = commandId;
             result.status = "CONFLICT";
             result.entityId = command.entityId;
             result.entityType = command.entityType;
-            result.conflictInfo = toConflictInfo(conflicted.info());
+            result.conflictInfo = toConflictInfo(info);
             return result;
         }
 
@@ -147,7 +143,6 @@ public class CommandService {
         if (name.startsWith("ITEM_")) return itemCommandHandler.handle(type, command, userId);
         if (name.startsWith("CONTAINER_")) return containerCommandHandler.handle(type, command, userId);
         if (name.startsWith("IMAGE_")) return imageCommandHandler.handle(type, command, userId);
-        if (name.startsWith("SYNONYM_")) return synonymCommandHandler.handle(type, command, userId);
         throw new IllegalArgumentException("No handler for command type: " + type);
     }
 

@@ -12,20 +12,6 @@ import java.util.UUID;
 public class SynonymRepository implements PanacheRepository<Synonym> {
 
     /**
-     * Find all synonyms visible to a user (global + user-specific)
-     */
-    public List<Synonym> findByUser(String userId) {
-        return list("userId IS NULL OR userId = ?1", userId);
-    }
-
-    /**
-     * Find synonym by ID, accessible by the given user (global or owned)
-     */
-    public Optional<Synonym> findByIdAndUser(UUID id, String userId) {
-        return find("id = ?1 AND (userId IS NULL OR userId = ?2)", id, userId).firstResultOptional();
-    }
-
-    /**
      * Find all synonyms for a given term (bidirectional lookup).
      * If the term matches a canonical_term, return all its synonyms.
      * If the term matches a synonym, return the canonical_term and its siblings.
