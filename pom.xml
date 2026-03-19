@@ -78,18 +78,6 @@
             <artifactId>quarkus-flyway</artifactId>
         </dependency>
 
-        <!-- Security -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-oidc</artifactId>
-        </dependency>
-
-        <!-- WebSockets for real-time sync -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-websockets</artifactId>
-        </dependency>
-
         <!-- OpenAPI / Swagger -->
         <dependency>
             <groupId>io.quarkus</groupId>
