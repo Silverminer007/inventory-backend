@@ -171,3 +171,35 @@ jobs:
           file: src/main/docker/Dockerfile.native
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+
+      - name: 🚀 Trigger Production Deployment
+        if: github.ref == 'refs/heads/master'
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.DEPLOYMENT_REPO_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/silverminer007/inventory-deployment/dispatches \
+            -d '{
+              "event_type":"deploy-production",
+              "client_payload":{
+                "service":"backend",
+                "version":"${{steps.version.outputs.tag}}",
+                "image":"${{env.IMAGE_NAME}}"
+              }
+            }'
+
+      - name: 🧪 Trigger Staging Deployment
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.DEPLOYMENT_REPO_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/silverminer007/inventory-deployment/dispatches \
+            -d '{
+              "event_type":"deploy-staging",
+              "client_payload":{
+                "service":"backend",
+                "version":"${{steps.version.outputs.tag}}",
+                "image":"${{env.IMAGE_NAME}}"
+              }
+            }'
