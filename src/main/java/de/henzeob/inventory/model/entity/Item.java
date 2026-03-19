@@ -48,6 +48,9 @@ public class Item extends PanacheEntityBase {
     public Set<ItemTag> tags = new HashSet<>();
 
     @NotNull
+    public Set<String> synonyms = new HashSet<>();
+
+    @NotNull
     @Column(name = "last_modified", nullable = false)
     public LocalDateTime lastModified = LocalDateTime.now();
 

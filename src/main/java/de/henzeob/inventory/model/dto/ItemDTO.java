@@ -28,6 +28,7 @@ public class ItemDTO {
     public String barcode;
     public String qrCode;
     public Set<String> tags;
+    public Set<String> synonyms;
 
     // Metadata
     public LocalDateTime lastModified;
