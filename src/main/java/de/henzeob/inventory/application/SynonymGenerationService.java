@@ -11,9 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -26,11 +24,16 @@ public class SynonymGenerationService {
      * Generate synonyms for an item name using LLM and persist them.
      * Graceful fallback: catches all exceptions so item creation is never affected.
      */
-    public void generateSynonyms(String itemName, String userId) {
+    public Set<String> generateSynonyms(String itemName, String userId) {
+        List<Synonym> cachedSynonyms = synonymRepository.findSynonymsForTerm(itemName, userId);
+        if(!cachedSynonyms.isEmpty()) {
+            return cachedSynonyms.stream().map(synonym -> synonym.synonym).collect(Collectors.toSet());
+        }
+        Set<String> generatedSynonyms = new HashSet<>();
         try {
             String apiKey = System.getenv("ANTHROPIC_API_KEY");
             if (apiKey == null || apiKey.isBlank()) {
-                return;
+                return new HashSet<>();
             }
 
             List<String> synonymTerms = callLlm(itemName, apiKey);
@@ -45,11 +48,13 @@ public class SynonymGenerationService {
                     synonym.synonym = term;
                     synonym.userId = userId;
                     synonymRepository.persist(synonym);
+                    generatedSynonyms.add(synonym.synonym);
                 }
             }
         } catch (Exception e) {
             System.err.println("Synonym generation failed: " + e.getMessage());
         }
+        return generatedSynonyms;
     }
 
     private List<String> callLlm(String itemName, String apiKey) throws Exception {
@@ -58,10 +63,10 @@ public class SynonymGenerationService {
         String prompt = """
                 Du bist ein Inventar-Assistent. Für den folgenden Gegenstand, gib mir alternative \
                 Bezeichnungen und Suchbegriffe, unter denen man diesen Gegenstand auch finden könnte.
-
+                
                 Gib nur eine kommagetrennte Liste zurück. Keine Sätze, keine Erklärungen.
                 Alles klein geschrieben. Maximal 5 Begriffe.
-
+                
                 Gegenstand: "%s"
                 """.formatted(itemName);
 

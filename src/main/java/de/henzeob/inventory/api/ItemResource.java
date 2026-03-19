@@ -1,6 +1,7 @@
 package de.henzeob.inventory.api;
 
 import de.henzeob.inventory.application.ImageService;
+import de.henzeob.inventory.application.SynonymGenerationService;
 import de.henzeob.inventory.application.TaggingService;
 import de.henzeob.inventory.model.dto.ImageDTO;
 import de.henzeob.inventory.model.dto.ItemDTO;
@@ -34,6 +35,8 @@ public class ItemResource {
     ItemService itemService;
     @Inject
     TaggingService taggingService;
+    @Inject
+    SynonymGenerationService synonymGenerationService;
     @Inject
     ImageService imageService;
 
@@ -76,14 +79,10 @@ public class ItemResource {
     }
 
     @GET
-    @Path("/search")
-    @Operation(summary = "Search items by name")
-    public Response searchItems(
-            @QueryParam("q") @DefaultValue("") String query,
-            @QueryParam("tags") List<String> tags
-    ) {
-        List<ItemDTO> results = itemService.searchItems(query, tags, getCurrentUserId());
-        return Response.ok(results).build();
+    @Path("/synonyms/suggest")
+    public Response suggestSynonyms(@QueryParam("item") String item) {
+        Set<String> tags = this.synonymGenerationService.generateSynonyms(item, getCurrentUserId());
+        return Response.ok(tags).build();
     }
 
     @GET
