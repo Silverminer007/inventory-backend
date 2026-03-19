@@ -19,7 +19,6 @@ public class ContainerDTO {
     @NotNull(message = "Container-Typ ist erforderlich")
     public String containerType;  // ROOM, SHELF, BOX
 
-    public String locationType;   // PERMANENT, TEMPORARY (only for ROOM)
     public String location;       // only for ROOM
 
     public String position;

@@ -18,7 +18,6 @@ public class ContainerMapper {
         dto.name = container.name;
         dto.description = container.description;
         dto.containerType = container.containerType.name();
-        dto.locationType = container.locationType != null ? container.locationType.name() : null;
         dto.location = container.location;
         dto.position = container.position;
         dto.qrCode = container.qrCode;
@@ -62,11 +61,6 @@ public class ContainerMapper {
 
         // Only update location fields for ROOMs
         if (container.containerType == ContainerType.ROOM) {
-            if (dto.locationType != null) {
-                container.locationType = Container.LocationType.valueOf(dto.locationType);
-            } else {
-                container.locationType = null;
-            }
             container.location = dto.location;
         }
     }

@@ -53,9 +53,6 @@ public class ContainerCommandHandler {
         container.description = (String) p.get("description");
         container.containerType = ContainerType.valueOf(required(p, "containerType").toString());
         container.position = (String) p.get("position");
-        if (p.get("locationType") != null) {
-            container.locationType = Container.LocationType.valueOf(p.get("locationType").toString());
-        }
         container.location = (String) p.get("location");
         UUID parentId = toUUID(p.get("parentContainerId"));
         Container created = containerService.createContainer(container, parentId, userId);
@@ -89,13 +86,6 @@ public class ContainerCommandHandler {
         if (p.containsKey("position") && !Objects.equals(p.get("position"), container.position)
                 && serverChanged.contains("position")) {
             conflictingFields.add("position");
-        }
-        if (p.containsKey("locationType")) {
-            String serverLocationType = container.locationType != null ? container.locationType.name() : null;
-            if (!Objects.equals(p.get("locationType"), serverLocationType)
-                    && serverChanged.contains("locationType")) {
-                conflictingFields.add("locationType");
-            }
         }
         if (p.containsKey("location") && !Objects.equals(p.get("location"), container.location)
                 && serverChanged.contains("location")) {

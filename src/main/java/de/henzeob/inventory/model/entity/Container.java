@@ -35,10 +35,6 @@ public class Container extends PanacheEntityBase {
     @JoinColumn(name = "parent_container_id")
     public Container parentContainer;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "location_type")
-    public LocationType locationType;
-
     public String location;
 
     public String position;
@@ -106,15 +102,6 @@ public class Container extends PanacheEntityBase {
             count += child.getTotalItemCount();
         }
         return count;
-    }
-
-    public boolean isTemporary() {
-        return locationType == LocationType.TEMPORARY;
-    }
-
-    public enum LocationType {
-        PERMANENT,
-        TEMPORARY
     }
 
 }
