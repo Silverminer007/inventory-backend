@@ -113,12 +113,6 @@
             <artifactId>url-connection-client</artifactId>
         </dependency>
 
-        <!-- Hibernate Search -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-hibernate-search-orm-elasticsearch</artifactId>
-        </dependency>
-
         <!-- Validation -->
         <dependency>
             <groupId>io.quarkus</groupId>

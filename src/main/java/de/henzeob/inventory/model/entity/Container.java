@@ -5,17 +5,12 @@ import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
-import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
-import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexedEmbedded;
-import org.hibernate.search.mapper.pojo.mapping.definition.annotation.KeywordField;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@Indexed
 @Entity
 @Table(name = "containers")
 public class Container extends PanacheEntityBase {
@@ -26,11 +21,9 @@ public class Container extends PanacheEntityBase {
 
     @NotBlank
     @Column(nullable = false)
-    @FullTextField(analyzer = "german")
     public String name;
 
     @Column(columnDefinition = "TEXT")
-    @FullTextField(analyzer = "german")
     public String description;
 
     @NotNull
@@ -40,7 +33,6 @@ public class Container extends PanacheEntityBase {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_container_id")
-    @IndexedEmbedded(includeDepth = 1)
     public Container parentContainer;
 
     @Enumerated(EnumType.STRING)
@@ -72,7 +64,6 @@ public class Container extends PanacheEntityBase {
 
     @NotBlank
     @Column(name = "user_id", nullable = false)
-    @KeywordField
     public String userId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -92,8 +83,7 @@ public class Container extends PanacheEntityBase {
         if (parentContainer == null) {
             return "";
         }
-        String parentPath = parentContainer.getFullPath();
-        return parentPath;
+        return parentContainer.getFullPath();
     }
 
     /**
@@ -126,4 +116,5 @@ public class Container extends PanacheEntityBase {
         PERMANENT,
         TEMPORARY
     }
+
 }
