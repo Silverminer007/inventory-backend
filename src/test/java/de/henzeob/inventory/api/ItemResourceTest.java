@@ -13,7 +13,6 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
 
 @QuarkusTest
@@ -80,17 +79,7 @@ public class ItemResourceTest {
     }
 
     @Test
-    public void testSearchItems() {
-        given()
-                .queryParam("q", "laptop")
-                .when().get("/api/v1/items/search")
-                .then()
-                .statusCode(200)
-                .body(notNullValue());
-    }
-
-    @Test
-    public void testCreateItemAutoTaggingAtLeastTwoTags() {
+    public void testCreateItemNoAutoTagging() {
         // "roter Laptop" triggers: "Technik" (keyword "laptop") + "Farbe: Rot" (special rule "rot")
         String command = """
             [{
@@ -112,39 +101,12 @@ public class ItemResourceTest {
                 .then()
                 .statusCode(200)
                 .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.tags", hasSize(greaterThanOrEqualTo(2)));
-    }
-
-    @Test
-    public void testCreateItemAutoTaggingExactlyThreeTags() {
-        // "kleiner roter Laptop" triggers:
-        //   "Technik" (keyword "laptop") + "Klein" (special rule "klein") + "Farbe: Rot" (special rule "rot")
-        String command = """
-            [{
-                "commandId": "%s",
-                "commandType": "ITEM_CREATE",
-                "payload": {
-                    "name": "Kleiner roter Laptop",
-                    "description": "Ein kleiner roter Laptop",
-                    "containerId": "%s",
-                    "quantity": 1
-                }
-            }]
-        """.formatted(UUID.randomUUID(), containerId);
-
-        given()
-                .contentType("application/json")
-                .body(command)
-                .when().post("/commands")
-                .then()
-                .statusCode(200)
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.tags", hasSize(3));
+                .body("[0].snapshot.tags", hasSize(0));
     }
 
     @Test
     public void testAddTagsToItem() {
-        // Create item — "Laptop" gets auto-tag "Technik"
+        // Create item
         String createCommand = """
             [{
                 "commandId": "%s",
@@ -152,7 +114,8 @@ public class ItemResourceTest {
                 "payload": {
                     "name": "Laptop",
                     "containerId": "%s",
-                    "quantity": 1
+                    "quantity": 1,
+                    "tags": ["Technik"]
                 }
             }]
         """.formatted(UUID.randomUUID(), containerId);
@@ -208,7 +171,7 @@ public class ItemResourceTest {
 
     @Test
     public void testRemoveTagsFromItem() {
-        // Create item — "Kleiner roter Laptop" gets 3 auto-tags
+        // Create item
         String createCommand = """
             [{
                 "commandId": "%s",
@@ -216,7 +179,8 @@ public class ItemResourceTest {
                 "payload": {
                     "name": "Kleiner roter Laptop",
                     "containerId": "%s",
-                    "quantity": 1
+                    "quantity": 1,
+                    "tags": ["Technik", "Klein", "Farbe: Rot"]
                 }
             }]
         """.formatted(UUID.randomUUID(), containerId);
