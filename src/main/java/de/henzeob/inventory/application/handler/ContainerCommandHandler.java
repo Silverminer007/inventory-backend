@@ -107,7 +107,6 @@ public class ContainerCommandHandler {
         if (p.containsKey("name"))         overlayDto.name = (String) p.get("name");
         if (p.containsKey("description"))  overlayDto.description = (String) p.get("description");
         if (p.containsKey("position"))     overlayDto.position = (String) p.get("position");
-        if (p.containsKey("locationType")) overlayDto.locationType = (String) p.get("locationType");
         if (p.containsKey("location"))     overlayDto.location = (String) p.get("location");
         return containerService.updateContainer(entityId, overlayDto, userId);
     }
@@ -133,7 +132,6 @@ public class ContainerCommandHandler {
         dto.name = (String) p.get("name");
         dto.description = (String) p.get("description");
         dto.position = (String) p.get("position");
-        dto.locationType = (String) p.get("locationType");
         dto.location = (String) p.get("location");
         dto.version = toLong(p.get("version"));
         return containerService.updateContainer(entityId, dto, userId);

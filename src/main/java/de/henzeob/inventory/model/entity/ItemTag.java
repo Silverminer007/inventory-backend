@@ -3,7 +3,6 @@ package de.henzeob.inventory.model.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
-import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -13,7 +12,6 @@ import lombok.EqualsAndHashCode;
 @Table(name = "item_tags")
 public class ItemTag extends PanacheEntity {
     @Column(name = "tag")
-    @FullTextField(analyzer = "german")
     private String tag;
     @Enumerated(EnumType.STRING)
     @Column(name = "tag_type")
