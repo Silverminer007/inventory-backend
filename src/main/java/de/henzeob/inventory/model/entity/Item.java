@@ -48,6 +48,12 @@ public class Item extends PanacheEntityBase {
     public Set<ItemTag> tags = new HashSet<>();
 
     @NotNull
+    @ElementCollection
+    @CollectionTable(
+            name = "item_synonym",
+            joinColumns = @JoinColumn(name = "item_id")
+    )
+    @Column(name = "synonym", nullable = false)
     public Set<String> synonyms = new HashSet<>();
 
     @NotNull
