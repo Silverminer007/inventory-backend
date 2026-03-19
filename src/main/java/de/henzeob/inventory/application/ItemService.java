@@ -12,7 +12,6 @@ import jakarta.ws.rs.NotFoundException;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -26,14 +25,7 @@ public class ItemService {
     ItemMapper itemMapper;
 
     @Inject
-    TaggingService taggingService;
-
-    @Inject
     ContainerService containerService;
-    @Inject
-    SynonymGenerationService synonymGenerationService;
-    @ConfigProperty(name = "quarkus.hibernate-search-orm.active", defaultValue = "true")
-    boolean hibernateSearchActive;
 
     public List<ItemDTO> getAllItems(String userId) {
         return itemRepository.findByUser(userId).stream().map(itemMapper::toDTO).collect(Collectors.toList());
@@ -54,14 +46,7 @@ public class ItemService {
         setLocation(item, dto.containerId, userId);
         itemRepository.persist(item);
 
-        if (dto.tags == null || dto.tags.isEmpty()) {
-            Set<ItemTag> autoTags = taggingService.generateTags(dto.name, dto.description);
-            for (ItemTag tag : autoTags) {
-                tag.setItem(item);
-                tag.persist();
-            }
-            item.tags.addAll(autoTags);
-        } else {
+        if (dto.tags != null && !dto.tags.isEmpty()) {
             for (String tagStr : dto.tags) {
                 ItemTag tag = new ItemTag();
                 tag.setTag(tagStr);
@@ -71,6 +56,7 @@ public class ItemService {
                 item.tags.add(tag);
             }
         }
+
         return itemMapper.toDTO(item);
     }
 
