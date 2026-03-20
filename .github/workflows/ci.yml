@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [ main, master, develop ]
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: silverminer007/inventory-backend
-
 permissions:
   contents: write
   checks: write
@@ -68,9 +64,7 @@ jobs:
         if: github.ref == 'refs/heads/master'
         run: |
           npm install -g semantic-release \
-            @semantic-release/commit-analyzer \
-            @semantic-release/release-notes-generator \
-            @semantic-release/github
+            @semantic-release/commit-analyzer
 
       - name: 🚀 Run Semantic Release (GitHub only)
         if: github.ref == 'refs/heads/master'
@@ -79,17 +73,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx semantic-release --plugins \
-            @semantic-release/commit-analyzer \
-            @semantic-release/release-notes-generator \
-            @semantic-release/github
-
-      - name: 🧾 Get latest release version
-        if: github.ref == 'refs/heads/master'
-        run: |
-          VERSION=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' | sed 's/^v//')
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            @semantic-release/commit-analyzer
 
       - name: Calculate Image Name and Version tag
         id: version
@@ -97,16 +81,16 @@ jobs:
           REPO_OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
           if [ "${{ github.ref }}" = "refs/heads/master" ]; then
-            VERSION=v$(gh release list --limit 1 --json tagName --jq '.[0].tagName' | sed 's/^v//')
+            VERSION=$(git tag --sort=-creatordate | head -1)
           else
             VERSION="develop-$(echo ${{ github.sha }} | cut -c1-8)"  # develop-a1b2c3d4
           fi
 
-          IMAGE=ghcr.io/$REPO_OWNER_LC/chronos-date-api
+          IMAGE=ghcr.io/$REPO_OWNER_LC/inventory-backend
 
-          echo "IMAGE=${{needs.calculate-version.outputs.image}}" >> $GITHUB_OUTPUT
+          echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "**Image**: ${{needs.calculate-version.outputs.image}}:$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Image**: $IMAGE:$VERSION" >> $GITHUB_STEP_SUMMARY
         env:
           GH_TOKEN: ${{ github.token }}
 
