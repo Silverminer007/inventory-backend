@@ -175,7 +175,7 @@ jobs:
       - name: Build
         run: |
           ./mvnw -B versions:set -DnewVersion=${{needs.calculate-version.outputs.version}}-native
-          ./mvnw -B package -DskipTests
+          ./mvnw -B package -DskipTests -Dnative
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
