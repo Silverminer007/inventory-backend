@@ -2,13 +2,20 @@ name: CI
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [main, master, develop]
+    branches: [ main, master, develop ]
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: silverminer007/inventory-backend
+
+permissions:
+  contents: write
+  checks: write
+  issues: write
+  pull-requests: write
+  packages: write
 
 jobs:
   test:
@@ -26,13 +33,87 @@ jobs:
       - name: Run tests
         run: ./mvnw test
 
-  build-jvm:
+      - name: 📊 Publish JUnit test results
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: |
+            **/target/surefire-reports/*.xml
+            **/target/failsafe-reports/*.xml
+            **/target/test-results/**/*.xml
+            **/target/quarkus-test-report.xml
+          check_name: "JUnit Tests"
+          job_name: "Test Report"
+          require_tests: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  calculate-version:
     needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{steps.version.outputs.VERSION}}
+      image: ${{steps.version.outputs.IMAGE}}
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Set up Node.js
+        if: github.ref == 'refs/heads/master'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 📦 Install Semantic Release
+        if: github.ref == 'refs/heads/master'
+        run: |
+          npm install -g semantic-release \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/github
+
+      - name: 🚀 Run Semantic Release (GitHub only)
+        if: github.ref == 'refs/heads/master'
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx semantic-release --plugins \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/github
+
+      - name: 🧾 Get latest release version
+        if: github.ref == 'refs/heads/master'
+        run: |
+          VERSION=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' | sed 's/^v//')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate Image Name and Version tag
+        id: version
+        run: |
+          REPO_OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+
+          if [ "${{ github.ref }}" = "refs/heads/master" ]; then
+            VERSION=v$(gh release list --limit 1 --json tagName --jq '.[0].tagName' | sed 's/^v//')
+          else
+            VERSION="develop-$(echo ${{ github.sha }} | cut -c1-8)"  # develop-a1b2c3d4
+          fi
+
+          IMAGE=ghcr.io/$REPO_OWNER_LC/chronos-date-api
+
+          echo "IMAGE=${{needs.calculate-version.outputs.image}}" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "**Image**: ${{needs.calculate-version.outputs.image}}:$VERSION" >> $GITHUB_STEP_SUMMARY
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  build-jvm:
+    needs: calculate-version
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,44 +124,18 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-          cache: maven
+
+      - name: 🧰 Set up Maven cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
 
       - name: Build
-        run: ./mvnw package -DskipTests
-
-      - name: Determine version
-        id: version
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ]]; then
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-            if [ -z "$LATEST_TAG" ]; then
-              echo "tag=0.1.0" >> "$GITHUB_OUTPUT"
-            else
-              # Strip leading 'v' if present
-              CURRENT=${LATEST_TAG#v}
-              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-
-              # Analyze commits since last tag
-              BUMP="patch"
-              COMMITS=$(git log "${LATEST_TAG}..HEAD" --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
-              while IFS= read -r MSG; do
-                if echo "$MSG" | grep -qE '^feat!:|^.*!:|BREAKING CHANGE'; then
-                  BUMP="major"
-                  break
-                elif echo "$MSG" | grep -qE '^feat(\(.*\))?:'; then
-                  BUMP="minor"
-                fi
-              done <<< "$COMMITS"
-
-              case "$BUMP" in
-                major) echo "tag=$((MAJOR + 1)).0.0" >> "$GITHUB_OUTPUT" ;;
-                minor) echo "tag=${MAJOR}.$((MINOR + 1)).0" >> "$GITHUB_OUTPUT" ;;
-                patch) echo "tag=${MAJOR}.${MINOR}.$((PATCH + 1))" >> "$GITHUB_OUTPUT" ;;
-              esac
-            fi
-          else
-            echo "tag=develop" >> "$GITHUB_OUTPUT"
-          fi
+          ./mvnw -B versions:set -DnewVersion=${{needs.calculate-version.outputs.version}}
+          ./mvnw -B package -DskipTests
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -89,27 +144,35 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: src/main/docker/Dockerfile.jvm
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+      - name: 🐳 Build & Push Docker Image
+        run: |
+          docker build -t ${{needs.calculate-version.outputs.image}}:${{needs.calculate-version.outputs.version}} -f src/main/docker/Dockerfile.jvm .
+          docker push ${{needs.calculate-version.outputs.image}}:${{needs.calculate-version.outputs.version}}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag release
+      - name: 📦 Re-tag Docker Image (latest)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
-          git tag "v${{ steps.version.outputs.tag }}"
-          git push origin "v${{ steps.version.outputs.tag }}"
+          echo "Tagging as ${{needs.calculate-version.outputs.image}}:latest ..."
+          docker tag ${{needs.calculate-version.outputs.image}}:${{needs.calculate-version.outputs.version}} ${{needs.calculate-version.outputs.image}}:latest
+
+          echo "Pushing ${{needs.calculate-version.outputs.image}}:latest ..."
+          docker push ${{needs.calculate-version.outputs.image}}:latest
+
+      - name: 📦 Re-tag Docker Image (develop)
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          echo "Tagging as ${{needs.calculate-version.outputs.image}}:develop ..."
+          docker tag ${{needs.calculate-version.outputs.image}}:${{needs.calculate-version.outputs.version}} ${{needs.calculate-version.outputs.image}}:develop
+
+          echo "Pushing ${{needs.calculate-version.outputs.image}}:develop ..."
+          docker push ${{needs.calculate-version.outputs.image}}:develop
 
   build-native:
-    needs: test
+    needs: calculate-version
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,42 +183,18 @@ jobs:
         with:
           java-version: 21
           distribution: graalvm
-          cache: maven
 
-      - name: Build native
-        run: ./mvnw package -DskipTests -Dnative
+      - name: 🧰 Set up Maven cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
 
-      - name: Determine version
-        id: version
+      - name: Build
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ]]; then
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-            if [ -z "$LATEST_TAG" ]; then
-              echo "tag=0.1.0-native" >> "$GITHUB_OUTPUT"
-            else
-              CURRENT=${LATEST_TAG#v}
-              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-
-              BUMP="patch"
-              COMMITS=$(git log "${LATEST_TAG}..HEAD" --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
-              while IFS= read -r MSG; do
-                if echo "$MSG" | grep -qE '^feat!:|^.*!:|BREAKING CHANGE'; then
-                  BUMP="major"
-                  break
-                elif echo "$MSG" | grep -qE '^feat(\(.*\))?:'; then
-                  BUMP="minor"
-                fi
-              done <<< "$COMMITS"
-
-              case "$BUMP" in
-                major) echo "tag=$((MAJOR + 1)).0.0-native" >> "$GITHUB_OUTPUT" ;;
-                minor) echo "tag=${MAJOR}.$((MINOR + 1)).0-native" >> "$GITHUB_OUTPUT" ;;
-                patch) echo "tag=${MAJOR}.${MINOR}.$((PATCH + 1))-native" >> "$GITHUB_OUTPUT" ;;
-              esac
-            fi
-          else
-            echo "tag=develop-native" >> "$GITHUB_OUTPUT"
-          fi
+          ./mvnw -B versions:set -DnewVersion=${{needs.calculate-version.outputs.version}}-native
+          ./mvnw -B package -DskipTests
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -164,14 +203,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: src/main/docker/Dockerfile.native
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+      - name: 🐳 Build & Push Docker Image
+        run: |
+          docker build -t ${{needs.calculate-version.outputs.image}}:${{needs.calculate-version.outputs.version}}-native -f src/main/docker/Dockerfile.native .
+          docker push ${{needs.calculate-version.outputs.image}}:${{needs.calculate-version.outputs.version}}-native
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 📦 Re-tag Docker Image (latest)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          echo "Tagging as ${{needs.calculate-version.outputs.image}}:latest-native ..."
+          docker tag ${{needs.calculate-version.outputs.image}}:${{needs.calculate-version.outputs.version}}-native ${{needs.calculate-version.outputs.image}}:latest-native
+
+          echo "Pushing ${{needs.calculate-version.outputs.image}}:latest-native ..."
+          docker push ${{needs.calculate-version.outputs.image}}:latest-native
+
+      - name: 📦 Re-tag Docker Image (develop)
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          echo "Tagging as ${{needs.calculate-version.outputs.image}}:develop-native ..."
+          docker tag ${{needs.calculate-version.outputs.image}}:${{needs.calculate-version.outputs.version}}-native ${{needs.calculate-version.outputs.image}}:develop-native
+
+          echo "Pushing ${{needs.calculate-version.outputs.image}}:develop-native ..."
+          docker push ${{needs.calculate-version.outputs.image}}:develop-native
+
+  deploy:
+    needs:
+     - build-native
+     - calculate-version
+    runs-on: ubuntu-latest
+    steps:
       - name: 🚀 Trigger Production Deployment
         if: github.ref == 'refs/heads/master'
         run: |
@@ -183,8 +245,8 @@ jobs:
               "event_type":"deploy-production",
               "client_payload":{
                 "service":"backend",
-                "version":"${{steps.version.outputs.tag}}",
-                "image":"${{env.IMAGE_NAME}}"
+                "version":"${{needs.calculate-version.outputs.version}}",
+                "image":"${{needs.calculate-version.outputs.image}}"
               }
             }'
 
@@ -199,7 +261,7 @@ jobs:
               "event_type":"deploy-staging",
               "client_payload":{
                 "service":"backend",
-                "version":"${{steps.version.outputs.tag}}",
-                "image":"${{env.IMAGE_NAME}}"
+                "version":"${{needs.calculate-version.outputs.version}}",
+                "image":"${{needs.calculate-version.outputs.image}}"
               }
             }'
