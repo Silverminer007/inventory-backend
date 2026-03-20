@@ -62,7 +62,7 @@ public class OpenThesaurusImporter {
                 return;
             }
 
-            BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
             String line;
             int lineCount = 0;
             int pairCount = 0;
@@ -138,6 +138,7 @@ public class OpenThesaurusImporter {
 
             LOG.infof("OpenThesaurus import complete: %d synsets, %d synonym pairs", lineCount, pairCount);
 
+            } // end try(BufferedReader)
         } catch (Exception e) {
             LOG.error("Failed to import OpenThesaurus data", e);
             try {

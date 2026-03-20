@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!--
+        DTOs use public fields exclusively for JSON serialization.
+        Jackson reads these fields via reflection — SpotBugs cannot trace
+        reflection-based access and incorrectly flags them as unread/unused.
+    -->
+    <Match>
+        <Package name="~de\.henzeob\.inventory\.model\.dto.*"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD,UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <!--
+        JPA entities follow the Quarkus Panache convention of public fields
+        managed by Hibernate. PA warnings and EI_EXPOSE warnings are expected
+        and intentional for this persistence pattern.
+    -->
+    <Match>
+        <Package name="~de\.henzeob\.inventory\.model\.entity.*"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD,PA_PUBLIC_PRIMITIVE_ATTRIBUTE,EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!--
+        LLM prompt strings use \n intentionally for consistent line endings
+        in API payloads. Using %n (platform newline) would be incorrect here.
+    -->
+    <Match>
+        <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+    </Match>
+
+    <!--
+        TaggingService uses a broad catch(Exception) as a deliberate resilience
+        pattern: LLM tag suggestion is optional; any failure returns an empty set
+        rather than propagating to the caller.
+    -->
+    <Match>
+        <Class name="de.henzeob.inventory.application.TaggingService"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!--
+        OpenThesaurusImporter catches Exception broadly to handle both checked
+        IOException (from BufferedReader) and unchecked transaction exceptions
+        (QuarkusTransaction) in a single error handler with rollback logic.
+    -->
+    <Match>
+        <Class name="de.henzeob.inventory.application.OpenThesaurusImporter"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+</FindBugsFilter>

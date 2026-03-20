@@ -41,8 +41,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Run code quality checks
+        run: ./mvnw verify -DskipTests
+
   calculate-version:
-    needs: test
     runs-on: ubuntu-latest
     outputs:
       version: ${{steps.version.outputs.VERSION}}
@@ -92,7 +106,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   build-jvm:
-    needs: calculate-version
+    needs:
+      - calculate-version
+      - test
+      - quality
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     steps:
@@ -151,7 +168,10 @@ jobs:
           docker push ${{needs.calculate-version.outputs.image}}:develop
 
   build-native:
-    needs: calculate-version
+    needs:
+      - calculate-version
+      - test
+      - quality
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     steps:
@@ -211,8 +231,8 @@ jobs:
 
   deploy:
     needs:
-     - build-native
-     - calculate-version
+      - build-native
+      - calculate-version
     runs-on: ubuntu-latest
     steps:
       - name: 🚀 Trigger Production Deployment

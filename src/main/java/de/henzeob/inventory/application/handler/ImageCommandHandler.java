@@ -20,7 +20,10 @@ public class ImageCommandHandler {
         Map<String, Object> p = command.payload;
         return switch (type) {
             case IMAGE_UPLOAD      -> handleUpload(p, userId);
-            case IMAGE_DELETE      -> { handleDelete(command.entityId, userId); yield null; }
+            case IMAGE_DELETE      -> {
+                handleDelete(command.entityId, userId);
+                yield null;
+            }
             case IMAGE_SET_PRIMARY -> handleSetPrimary(command.entityId, userId);
             default -> throw new IllegalArgumentException("Not an IMAGE command: " + type);
         };
