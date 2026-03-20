@@ -35,9 +35,6 @@ jobs:
         with:
           report_paths: |
             **/target/surefire-reports/*.xml
-            **/target/failsafe-reports/*.xml
-            **/target/test-results/**/*.xml
-            **/target/quarkus-test-report.xml
           check_name: "JUnit Tests"
           job_name: "Test Report"
           require_tests: false
@@ -124,7 +121,7 @@ jobs:
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
