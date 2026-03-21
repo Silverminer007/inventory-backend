@@ -49,7 +49,7 @@ public class ImageResourceTest {
         given()
                 .contentType("application/json")
                 .body(command)
-                .when().post("/commands")
+                .when().post("/api/v1/commands")
                 .then()
                 .statusCode(200)
                 .body("[0].status", is("FAILED"));
