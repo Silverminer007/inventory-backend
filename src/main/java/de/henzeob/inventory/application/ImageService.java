@@ -43,6 +43,9 @@ public class ImageService {
     @ConfigProperty(name = "inventory.s3.bucket-name", defaultValue = "inventory-images")
     String bucketName;
 
+    @ConfigProperty(name = "inventory.s3.bucket-base-path", defaultValue = "inventory")
+    String bucketBasePath;
+
     @ConfigProperty(name = "quarkus.s3.endpoint-override", defaultValue = "http://localhost:9000")
     String s3Endpoint;
 
@@ -125,7 +128,7 @@ public class ImageService {
 
     public String uploadToS3Temp(InputStream data, long fileSize, String filename, String contentType, String userId) {
         String safeFilename = filename != null ? filename.replaceAll("[^a-zA-Z0-9._-]", "_") : "file";
-        String s3Key = userId + "/temp/" + UUID.randomUUID() + "_" + safeFilename;
+        String s3Key = bucketBasePath + "/" + userId + "/temp/" + UUID.randomUUID() + "_" + safeFilename;
         uploadToS3(s3Key, data, fileSize, contentType);
         return s3Key;
     }
@@ -171,7 +174,7 @@ public class ImageService {
 
     private String buildS3Key(String userId, String entityType, UUID entityId, String filename) {
         String safeFilename = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
-        return userId + "/" + entityType + "/" + entityId + "/" + UUID.randomUUID() + "_" + safeFilename;
+        return bucketBasePath + "/" + userId + "/" + entityType + "/" + entityId + "/" + UUID.randomUUID() + "_" + safeFilename;
     }
 
     private void uploadToS3(String s3Key, InputStream data, long fileSize, String contentType) {
