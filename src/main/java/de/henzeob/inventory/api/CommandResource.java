@@ -17,7 +17,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Path("/commands")
+@Path("/api/v1/commands")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 @Tag(name = "Commands", description = "Event-sourcing command API")
