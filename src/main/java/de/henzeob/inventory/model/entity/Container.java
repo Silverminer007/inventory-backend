@@ -16,7 +16,6 @@ import java.util.UUID;
 public class Container extends PanacheEntityBase {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     public UUID id;
 
     @NotBlank

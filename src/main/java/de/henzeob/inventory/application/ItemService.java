@@ -40,11 +40,13 @@ public class ItemService {
     public ItemDTO createItem(ItemDTO dto, String userId) {
         Item item = new Item();
         item.userId = userId;
-        if (dto.id != null) item.id = dto.id;
+        if (dto.id != null) {
+            item.id = dto.id;
+        }
 
         itemMapper.updateEntity(item, dto);
         setLocation(item, dto.containerId, userId);
-        itemRepository.persist(item);
+        itemRepository.insert(item);
 
         if (dto.tags != null && !dto.tags.isEmpty()) {
             for (String tagStr : dto.tags) {

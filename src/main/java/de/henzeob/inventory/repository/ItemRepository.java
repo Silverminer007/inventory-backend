@@ -136,4 +136,8 @@ public class ItemRepository implements PanacheRepository<Item> {
         return list("userId = ?1 and lastModified > ?2",
                 Sort.by("lastModified"), userId, since);
     }
+
+    public void insert(Item item) {
+        this.getEntityManager().persist(item);
+    }
 }

@@ -43,6 +43,10 @@ public class ContainerRepository implements PanacheRepository<Container> {
         return list("parentContainer.id = ?1 and userId = ?2", Sort.by("name"), parentId, userId);
     }
 
+    public void insert(Container container) {
+        this.getEntityManager().persist(container);
+    }
+
     /**
      * Find all descendant container IDs using a recursive CTE.
      */

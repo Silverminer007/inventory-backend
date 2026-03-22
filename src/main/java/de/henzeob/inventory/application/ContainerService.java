@@ -40,7 +40,7 @@ public class ContainerService {
             throw new IllegalArgumentException("Nur Räume dürfen keinen übergeordneten Container haben");
         }
 
-        containerRepository.persist(container);
+        containerRepository.insert(container);
 
         return container;
     }
