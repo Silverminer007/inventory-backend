@@ -46,24 +46,4 @@ public class ContainerRepository implements PanacheRepository<Container> {
     public void insert(Container container) {
         this.getEntityManager().persist(container);
     }
-
-    /**
-     * Find all descendant container IDs using a recursive CTE.
-     */
-    @SuppressWarnings("unchecked")
-    public List<UUID> findAllDescendantIds(UUID containerId, String userId) {
-        return getEntityManager()
-                .createNativeQuery("""
-                    WITH RECURSIVE descendants AS (
-                        SELECT id FROM containers WHERE id = :containerId AND user_id = :userId
-                        UNION ALL
-                        SELECT c.id FROM containers c
-                        JOIN descendants d ON c.parent_container_id = d.id
-                    )
-                    SELECT id FROM descendants
-                """, UUID.class)
-                .setParameter("containerId", containerId)
-                .setParameter("userId", userId)
-                .getResultList();
-    }
 }
