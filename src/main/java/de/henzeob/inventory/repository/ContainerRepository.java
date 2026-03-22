@@ -44,6 +44,9 @@ public class ContainerRepository implements PanacheRepository<Container> {
     }
 
     public void insert(Container container) {
+        if (container.id == null) {
+            container.id = UUID.randomUUID();
+        }
         this.getEntityManager().persist(container);
     }
 }

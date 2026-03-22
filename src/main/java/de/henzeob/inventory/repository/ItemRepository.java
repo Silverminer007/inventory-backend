@@ -48,6 +48,9 @@ public class ItemRepository implements PanacheRepository<Item> {
     }
 
     public void insert(Item item) {
+        if (item.id == null) {
+            item.id = UUID.randomUUID();
+        }
         this.getEntityManager().persist(item);
     }
 }
