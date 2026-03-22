@@ -15,10 +15,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @ApplicationScoped
 public class CommandService {
@@ -41,6 +38,7 @@ public class CommandService {
 
     public List<CommandResultDTO> processBatch(List<CommandDTO> commands, String userId) {
         List<CommandResultDTO> results = new ArrayList<>();
+        commands.sort(Comparator.comparing(command -> command.issuedAt));
         for (CommandDTO dto : commands) {
             results.add(self.processOne(dto, userId));
         }
