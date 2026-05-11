@@ -48,7 +48,7 @@ public class CategoryService {
     }
 
     public Category getDefaultCategoryEntity() {
-        return categoryRepository.findByShortCode("XX")
+        return categoryRepository.findByShortCode(Category.DEFAULT_SHORT_CODE)
                 .orElseThrow(() -> new NotFoundException("Default category not found"));
     }
 
@@ -61,12 +61,12 @@ public class CategoryService {
         if (categoryRepository.findByShortCode(dto.shortCode).isPresent()) {
             throw new IllegalArgumentException("Short code already in use: " + dto.shortCode);
         }
-        if (dto.hue == null) {
-            dto.hue = generateHue();
-        }
         Category category = new Category();
         if (dto.id != null) category.id = dto.id;
         categoryMapper.updateEntity(category, dto);
+        if (category.hue == null) {
+            category.hue = generateHue();
+        }
         categoryRepository.persist(category);
         return categoryMapper.toDTO(category);
     }

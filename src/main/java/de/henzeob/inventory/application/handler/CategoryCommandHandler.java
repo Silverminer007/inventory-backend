@@ -128,7 +128,6 @@ public class CategoryCommandHandler {
         if (p.containsKey("description")) dto.description = (String) p.get("description");
         if (p.containsKey("shortCode"))   dto.shortCode = (String) p.get("shortCode");
         if (p.containsKey("hue"))         dto.hue = toInteger(p.get("hue"));
-        dto.version = toLong(p.get("version"));
         return categoryService.updateCategory(entityId, dto);
     }
 

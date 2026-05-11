@@ -10,6 +10,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "categories")
 public class Category extends PanacheEntityBase {
+    public static final String DEFAULT_SHORT_CODE = "XX";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     public UUID id;

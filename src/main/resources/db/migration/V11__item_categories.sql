@@ -9,7 +9,6 @@ CREATE TABLE categories
     version       BIGINT           NOT NULL DEFAULT 0
 );
 
-CREATE UNIQUE INDEX categories_short_code_uindex ON categories (short_code);
 CREATE INDEX categories_name_index ON categories (name);
 
 INSERT INTO categories (name, description, short_code)
