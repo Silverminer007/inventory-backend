@@ -55,7 +55,8 @@ public class ContainerCommandHandler {
         container.position = (String) p.get("position");
         container.location = (String) p.get("location");
         UUID parentId = toUUID(p.get("parentContainerId"));
-        Container created = containerService.createContainer(container, parentId, userId);
+        UUID categoryId = p.get("primaryCategory") instanceof Map<?, ?> catMap ? toUUID(catMap.get("id")) : null;
+        Container created = containerService.createContainer(container, parentId, categoryId, userId);
         return containerMapper.toDTO(created);
     }
 
@@ -91,6 +92,13 @@ public class ContainerCommandHandler {
                 && serverChanged.contains("location")) {
             conflictingFields.add("location");
         }
+        if (p.containsKey("primaryCategory") && p.get("primaryCategory") instanceof Map<?, ?> catMap) {
+            UUID clientCategoryId = toUUID(catMap.get("id"));
+            UUID serverCategoryId = container.primaryCategory != null ? container.primaryCategory.id : null;
+            if (!Objects.equals(clientCategoryId, serverCategoryId) && serverChanged.contains("primaryCategory")) {
+                conflictingFields.add("primaryCategory");
+            }
+        }
 
         if (!conflictingFields.isEmpty()) {
             ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
@@ -108,6 +116,10 @@ public class ContainerCommandHandler {
         if (p.containsKey("description"))  overlayDto.description = (String) p.get("description");
         if (p.containsKey("position"))     overlayDto.position = (String) p.get("position");
         if (p.containsKey("location"))     overlayDto.location = (String) p.get("location");
+        if (p.containsKey("primaryCategory") && p.get("primaryCategory") instanceof Map<?, ?> catMap) {
+            overlayDto.primaryCategory = new ContainerDTO.CategoryInfo();
+            overlayDto.primaryCategory.id = toUUID(catMap.get("id"));
+        }
         return containerService.updateContainer(entityId, overlayDto, userId);
     }
 
@@ -134,6 +146,10 @@ public class ContainerCommandHandler {
         dto.position = (String) p.get("position");
         dto.location = (String) p.get("location");
         dto.version = toLong(p.get("version"));
+        if (p.get("primaryCategory") instanceof Map<?, ?> catMap) {
+            dto.primaryCategory = new ContainerDTO.CategoryInfo();
+            dto.primaryCategory.id = toUUID(catMap.get("id"));
+        }
         return containerService.updateContainer(entityId, dto, userId);
     }
 

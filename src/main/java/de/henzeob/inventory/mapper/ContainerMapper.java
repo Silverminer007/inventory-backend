@@ -39,6 +39,12 @@ public class ContainerMapper {
             dto.parent = parent;
         }
 
+        ContainerDTO.CategoryInfo categoryInfo = new ContainerDTO.CategoryInfo();
+        categoryInfo.id = container.primaryCategory.id;
+        categoryInfo.name = container.primaryCategory.name;
+        categoryInfo.shortCode = container.primaryCategory.shortCode;
+        dto.primaryCategory = categoryInfo;
+
         return dto;
     }
 

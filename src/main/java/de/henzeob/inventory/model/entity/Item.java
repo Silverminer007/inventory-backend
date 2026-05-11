@@ -30,6 +30,11 @@ public class Item extends PanacheEntityBase {
     @JoinColumn(name = "container_id", nullable = false)
     public Container container;
 
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
+    public Category category;
+
     public String position;
 
     @NotNull

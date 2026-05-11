@@ -60,6 +60,10 @@ public class ItemCommandHandler {
             for (Object t : rawTags) tags.add(t.toString());
             dto.tags = tags;
         }
+        if (p.get("category") instanceof Map<?, ?> catMap) {
+            dto.category = new ItemDTO.CategoryInfo();
+            dto.category.id = toUUID(catMap.get("id"));
+        }
         return itemService.createItem(dto, userId);
     }
 
@@ -108,6 +112,13 @@ public class ItemCommandHandler {
                 conflictingFields.add("tags");
             }
         }
+        if (p.containsKey("category") && p.get("category") instanceof Map<?, ?> catMap) {
+            UUID clientCategoryId = toUUID(catMap.get("id"));
+            UUID serverCategoryId = item.category != null ? item.category.id : null;
+            if (!Objects.equals(clientCategoryId, serverCategoryId) && serverChanged.contains("category")) {
+                conflictingFields.add("category");
+            }
+        }
 
         if (!conflictingFields.isEmpty()) {
             ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
@@ -127,6 +138,10 @@ public class ItemCommandHandler {
         if (p.containsKey("quantity"))    overlayDto.quantity = p.get("quantity") != null ? toInteger(p.get("quantity")) : null;
         if (p.containsKey("barcode"))     overlayDto.barcode = (String) p.get("barcode");
         if (p.containsKey("tags"))        overlayDto.tags = extractTags(p);
+        if (p.containsKey("category") && p.get("category") instanceof Map<?, ?> catMap) {
+            overlayDto.category = new ItemDTO.CategoryInfo();
+            overlayDto.category.id = toUUID(catMap.get("id"));
+        }
         return itemService.updateItem(entityId, overlayDto, userId);
     }
 
@@ -160,6 +175,10 @@ public class ItemCommandHandler {
             for (Object t : rawTags) tags.add(t.toString());
         }
         dto.tags = tags;
+        if (p.get("category") instanceof Map<?, ?> catMap) {
+            dto.category = new ItemDTO.CategoryInfo();
+            dto.category.id = toUUID(catMap.get("id"));
+        }
         return itemService.updateItem(entityId, dto, userId);
     }
 
