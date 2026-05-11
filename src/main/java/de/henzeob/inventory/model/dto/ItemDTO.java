@@ -17,6 +17,8 @@ public class ItemDTO {
 
     public String description;
 
+    public CategoryInfo category;
+
     // Location
     public UUID containerId;
     public String position;
@@ -47,5 +49,11 @@ public class ItemDTO {
         public UUID id;
         public String name;
         public String path;
+    }
+
+    public static class CategoryInfo {
+        public UUID id;
+        public String name;
+        public String shortCode;
     }
 }

@@ -34,6 +34,12 @@ public class ItemMapper {
         dto.locationPath = item.getLocationPath();
         dto.containerType = item.getContainerType();
 
+        ItemDTO.CategoryInfo categoryInfo = new ItemDTO.CategoryInfo();
+        categoryInfo.id = item.category.id;
+        categoryInfo.name = item.category.name;
+        categoryInfo.shortCode = item.category.shortCode;
+        dto.category = categoryInfo;
+
         return dto;
     }
 

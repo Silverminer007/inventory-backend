@@ -16,6 +16,8 @@ public class ContainerDTO {
 
     public String description;
 
+    public CategoryInfo primaryCategory;
+
     @NotNull(message = "Container-Typ ist erforderlich")
     public String containerType;  // ROOM, SHELF, BOX
 
@@ -44,5 +46,11 @@ public class ContainerDTO {
         public UUID id;
         public String name;
         public String containerType;
+    }
+
+    public static class CategoryInfo {
+        public UUID id;
+        public String name;
+        public String shortCode;
     }
 }
