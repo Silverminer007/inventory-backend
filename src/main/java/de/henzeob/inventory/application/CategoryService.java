@@ -38,18 +38,18 @@ public class CategoryService {
 
     public CategoryDTO getCategoryByShortCode(String shortCode) {
         Category category = categoryRepository.findByShortCode(shortCode)
-                .orElseThrow(() -> new NotFoundException("Kategorie nicht gefunden"));
+                .orElseThrow(() -> new NotFoundException("Category not found"));
         return categoryMapper.toDTO(category);
     }
 
     public Category getCategoryEntity(UUID id) {
         return categoryRepository.findByIdOptional(id)
-                .orElseThrow(() -> new NotFoundException("Kategorie nicht gefunden"));
+                .orElseThrow(() -> new NotFoundException("Category not found"));
     }
 
     public Category getDefaultCategoryEntity() {
         return categoryRepository.findByShortCode("XX")
-                .orElseThrow(() -> new NotFoundException("Default-Kategorie nicht gefunden"));
+                .orElseThrow(() -> new NotFoundException("Default category not found"));
     }
 
     public CategoryDTO getCategory(UUID id) {
@@ -59,7 +59,7 @@ public class CategoryService {
     @Transactional
     public CategoryDTO createCategory(CategoryDTO dto) {
         if (categoryRepository.findByShortCode(dto.shortCode).isPresent()) {
-            throw new IllegalArgumentException("Kürzel bereits vergeben: " + dto.shortCode);
+            throw new IllegalArgumentException("Short code already in use: " + dto.shortCode);
         }
         if (dto.hue == null) {
             dto.hue = generateHue();
@@ -96,7 +96,7 @@ public class CategoryService {
     @Transactional
     public CategoryDTO updateCategory(UUID id, CategoryDTO dto) {
         Category category = categoryRepository.findByIdOptional(id)
-                .orElseThrow(() -> new NotFoundException("Kategorie nicht gefunden"));
+                .orElseThrow(() -> new NotFoundException("Category not found"));
         categoryMapper.updateEntity(category, dto);
         categoryRepository.persist(category);
         return categoryMapper.toDTO(category);
@@ -105,7 +105,7 @@ public class CategoryService {
     @Transactional
     public void deleteCategory(UUID id) {
         Category category = categoryRepository.findByIdOptional(id)
-                .orElseThrow(() -> new NotFoundException("Kategorie nicht gefunden"));
+                .orElseThrow(() -> new NotFoundException("Category not found"));
         categoryRepository.delete(category);
     }
 }

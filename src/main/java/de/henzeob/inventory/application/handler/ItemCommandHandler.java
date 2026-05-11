@@ -2,6 +2,7 @@ package de.henzeob.inventory.application.handler;
 
 import de.henzeob.inventory.application.ItemService;
 import de.henzeob.inventory.mapper.ItemMapper;
+import de.henzeob.inventory.model.dto.CategorySummaryDTO;
 import de.henzeob.inventory.model.dto.ItemDTO;
 import de.henzeob.inventory.model.entity.Command;
 import de.henzeob.inventory.model.entity.Item;
@@ -19,6 +20,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.required;
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toInteger;
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toLong;
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toUUID;
 
 @ApplicationScoped
 public class ItemCommandHandler {
@@ -61,7 +67,7 @@ public class ItemCommandHandler {
             dto.tags = tags;
         }
         if (p.get("category") instanceof Map<?, ?> catMap) {
-            dto.category = new ItemDTO.CategoryInfo();
+            dto.category = new CategorySummaryDTO();
             dto.category.id = toUUID(catMap.get("id"));
         }
         return itemService.createItem(dto, userId);
@@ -139,7 +145,7 @@ public class ItemCommandHandler {
         if (p.containsKey("barcode"))     overlayDto.barcode = (String) p.get("barcode");
         if (p.containsKey("tags"))        overlayDto.tags = extractTags(p);
         if (p.containsKey("category") && p.get("category") instanceof Map<?, ?> catMap) {
-            overlayDto.category = new ItemDTO.CategoryInfo();
+            overlayDto.category = new CategorySummaryDTO();
             overlayDto.category.id = toUUID(catMap.get("id"));
         }
         return itemService.updateItem(entityId, overlayDto, userId);
@@ -176,7 +182,7 @@ public class ItemCommandHandler {
         }
         dto.tags = tags;
         if (p.get("category") instanceof Map<?, ?> catMap) {
-            dto.category = new ItemDTO.CategoryInfo();
+            dto.category = new CategorySummaryDTO();
             dto.category.id = toUUID(catMap.get("id"));
         }
         return itemService.updateItem(entityId, dto, userId);
@@ -232,29 +238,5 @@ public class ItemCommandHandler {
             for (Object t : rawTags) tags.add(t.toString());
         }
         return tags;
-    }
-
-    private <T> T required(Map<String, Object> p, String key) {
-        Object val = p.get(key);
-        if (val == null) throw new IllegalArgumentException("Missing required payload field: " + key);
-        //noinspection unchecked
-        return (T) val;
-    }
-
-    private UUID toUUID(Object val) {
-        if (val == null) return null;
-        if (val instanceof UUID u) return u;
-        return UUID.fromString(val.toString());
-    }
-
-    private Long toLong(Object val) {
-        if (val == null) return null;
-        if (val instanceof Number n) return n.longValue();
-        return Long.parseLong(val.toString());
-    }
-
-    private Integer toInteger(Object val) {
-        if (val instanceof Number n) return n.intValue();
-        return Integer.parseInt(val.toString());
     }
 }

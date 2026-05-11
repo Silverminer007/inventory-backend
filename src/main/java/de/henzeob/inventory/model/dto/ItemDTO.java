@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 
+
 public class ItemDTO {
 
     public UUID id;
@@ -17,7 +18,7 @@ public class ItemDTO {
 
     public String description;
 
-    public CategoryInfo category;
+    public CategorySummaryDTO category;
 
     // Location
     public UUID containerId;
@@ -51,9 +52,4 @@ public class ItemDTO {
         public String path;
     }
 
-    public static class CategoryInfo {
-        public UUID id;
-        public String name;
-        public String shortCode;
-    }
 }

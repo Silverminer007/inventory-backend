@@ -2,6 +2,7 @@ package de.henzeob.inventory.application.handler;
 
 import de.henzeob.inventory.application.ContainerService;
 import de.henzeob.inventory.mapper.ContainerMapper;
+import de.henzeob.inventory.model.dto.CategorySummaryDTO;
 import de.henzeob.inventory.model.dto.ContainerDTO;
 import de.henzeob.inventory.model.entity.Command;
 import de.henzeob.inventory.model.entity.Container;
@@ -19,6 +20,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.required;
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toLong;
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toUUID;
 
 @ApplicationScoped
 public class ContainerCommandHandler {
@@ -117,7 +122,7 @@ public class ContainerCommandHandler {
         if (p.containsKey("position"))     overlayDto.position = (String) p.get("position");
         if (p.containsKey("location"))     overlayDto.location = (String) p.get("location");
         if (p.containsKey("primaryCategory") && p.get("primaryCategory") instanceof Map<?, ?> catMap) {
-            overlayDto.primaryCategory = new ContainerDTO.CategoryInfo();
+            overlayDto.primaryCategory = new CategorySummaryDTO();
             overlayDto.primaryCategory.id = toUUID(catMap.get("id"));
         }
         return containerService.updateContainer(entityId, overlayDto, userId);
@@ -147,7 +152,7 @@ public class ContainerCommandHandler {
         dto.location = (String) p.get("location");
         dto.version = toLong(p.get("version"));
         if (p.get("primaryCategory") instanceof Map<?, ?> catMap) {
-            dto.primaryCategory = new ContainerDTO.CategoryInfo();
+            dto.primaryCategory = new CategorySummaryDTO();
             dto.primaryCategory.id = toUUID(catMap.get("id"));
         }
         return containerService.updateContainer(entityId, dto, userId);
@@ -196,24 +201,5 @@ public class ContainerCommandHandler {
         UUID newParentId = toUUID(p.get("newParentContainerId"));
         Container moved = containerService.moveContainer(entityId, newParentId, userId);
         return containerMapper.toDTOWithChildren(moved);
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> T required(Map<String, Object> p, String key) {
-        Object val = p.get(key);
-        if (val == null) throw new IllegalArgumentException("Missing required payload field: " + key);
-        return (T) val;
-    }
-
-    private UUID toUUID(Object val) {
-        if (val == null) return null;
-        if (val instanceof UUID u) return u;
-        return UUID.fromString(val.toString());
-    }
-
-    private Long toLong(Object val) {
-        if (val == null) return null;
-        if (val instanceof Number n) return n.longValue();
-        return Long.parseLong(val.toString());
     }
 }

@@ -6,7 +6,6 @@ import de.henzeob.inventory.model.dto.CategoryDTO;
 import de.henzeob.inventory.model.entity.Category;
 import de.henzeob.inventory.model.entity.Command;
 import de.henzeob.inventory.model.enums.CommandType;
-import de.henzeob.inventory.repository.CategoryRepository;
 import de.henzeob.inventory.repository.CommandRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -19,6 +18,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.required;
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toInteger;
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toLong;
+import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toUUID;
+
 @ApplicationScoped
 public class CategoryCommandHandler {
 
@@ -27,9 +31,6 @@ public class CategoryCommandHandler {
 
     @Inject
     CategoryMapper categoryMapper;
-
-    @Inject
-    CategoryRepository categoryRepository;
 
     @Inject
     CommandRepository commandRepository;
@@ -58,8 +59,7 @@ public class CategoryCommandHandler {
         Long clientVersion = toLong(p.get("version"));
         boolean force = Boolean.TRUE.equals(p.get("force"));
 
-        Category category = categoryRepository.findByIdOptional(entityId)
-                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + entityId));
+        Category category = categoryService.getCategoryEntity(entityId);
 
         if (force || clientVersion == null || category.version.equals(clientVersion)) {
             return applyUpdate(entityId, p, category);
@@ -137,8 +137,7 @@ public class CategoryCommandHandler {
         boolean force = Boolean.TRUE.equals(p.get("force"));
 
         if (!force && clientVersion != null) {
-            Category category = categoryRepository.findByIdOptional(entityId)
-                    .orElseThrow(() -> new IllegalArgumentException("Category not found: " + entityId));
+            Category category = categoryService.getCategoryEntity(entityId);
             if (category.version > clientVersion) {
                 ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
                 info.clientVersion = clientVersion;
@@ -152,30 +151,5 @@ public class CategoryCommandHandler {
 
         categoryService.deleteCategory(entityId);
         return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> T required(Map<String, Object> p, String key) {
-        Object val = p.get(key);
-        if (val == null) throw new IllegalArgumentException("Missing required payload field: " + key);
-        return (T) val;
-    }
-
-    private UUID toUUID(Object val) {
-        if (val == null) return null;
-        if (val instanceof UUID u) return u;
-        return UUID.fromString(val.toString());
-    }
-
-    private Long toLong(Object val) {
-        if (val == null) return null;
-        if (val instanceof Number n) return n.longValue();
-        return Long.parseLong(val.toString());
-    }
-
-    private Integer toInteger(Object val) {
-        if (val == null) return null;
-        if (val instanceof Number n) return n.intValue();
-        return Integer.parseInt(val.toString());
     }
 }
