@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+
 public class ContainerDTO {
 
     public UUID id;
@@ -15,6 +16,8 @@ public class ContainerDTO {
     public String name;
 
     public String description;
+
+    public CategorySummaryDTO primaryCategory;
 
     @NotNull(message = "Container-Typ ist erforderlich")
     public String containerType;  // ROOM, SHELF, BOX
@@ -45,4 +48,5 @@ public class ContainerDTO {
         public String name;
         public String containerType;
     }
+
 }
