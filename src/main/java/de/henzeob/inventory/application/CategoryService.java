@@ -45,12 +45,20 @@ public class CategoryService {
                 .orElseThrow(() -> new NotFoundException("Kategorie nicht gefunden"));
     }
 
+    public Category getDefaultCategoryEntity() {
+        return categoryRepository.findByShortCode("XX")
+                .orElseThrow(() -> new NotFoundException("Default-Kategorie nicht gefunden"));
+    }
+
     public CategoryDTO getCategory(UUID id) {
         return categoryMapper.toDTO(getCategoryEntity(id));
     }
 
     @Transactional
     public CategoryDTO createCategory(CategoryDTO dto) {
+        if (categoryRepository.findByShortCode(dto.shortCode).isPresent()) {
+            throw new IllegalArgumentException("Kürzel bereits vergeben: " + dto.shortCode);
+        }
         Category category = new Category();
         if (dto.id != null) category.id = dto.id;
         categoryMapper.updateEntity(category, dto);

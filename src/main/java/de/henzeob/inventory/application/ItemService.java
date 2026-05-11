@@ -51,6 +51,8 @@ public class ItemService {
         setLocation(item, dto.containerId, userId);
         if (dto.category != null && dto.category.id != null) {
             item.category = categoryService.getCategoryEntity(dto.category.id);
+        } else {
+            item.category = categoryService.getDefaultCategoryEntity();
         }
         itemRepository.insert(item);
 
