@@ -20,6 +20,9 @@ public class Category extends PanacheEntityBase {
     @Column(unique = true, name = "short_code", nullable = false)
     public String shortCode;
 
+    @Column(nullable = false)
+    public Integer hue;
+
     @Version
     @NotNull
     public Long version;

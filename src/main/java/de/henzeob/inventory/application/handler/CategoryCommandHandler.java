@@ -50,6 +50,7 @@ public class CategoryCommandHandler {
         dto.name = required(p, "name");
         dto.description = (String) p.get("description");
         dto.shortCode = required(p, "shortCode");
+        if (p.containsKey("hue")) dto.hue = toInteger(p.get("hue"));
         return categoryService.createCategory(dto);
     }
 
@@ -81,6 +82,10 @@ public class CategoryCommandHandler {
                 && serverChanged.contains("shortCode")) {
             conflictingFields.add("shortCode");
         }
+        if (p.containsKey("hue") && !Objects.equals(toInteger(p.get("hue")), category.hue)
+                && serverChanged.contains("hue")) {
+            conflictingFields.add("hue");
+        }
 
         if (!conflictingFields.isEmpty()) {
             ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
@@ -97,6 +102,7 @@ public class CategoryCommandHandler {
         if (p.containsKey("name"))        overlayDto.name = (String) p.get("name");
         if (p.containsKey("description")) overlayDto.description = (String) p.get("description");
         if (p.containsKey("shortCode"))   overlayDto.shortCode = (String) p.get("shortCode");
+        if (p.containsKey("hue"))         overlayDto.hue = toInteger(p.get("hue"));
         return categoryService.updateCategory(entityId, overlayDto);
     }
 
@@ -121,6 +127,7 @@ public class CategoryCommandHandler {
         if (p.containsKey("name"))        dto.name = (String) p.get("name");
         if (p.containsKey("description")) dto.description = (String) p.get("description");
         if (p.containsKey("shortCode"))   dto.shortCode = (String) p.get("shortCode");
+        if (p.containsKey("hue"))         dto.hue = toInteger(p.get("hue"));
         dto.version = toLong(p.get("version"));
         return categoryService.updateCategory(entityId, dto);
     }
@@ -164,5 +171,11 @@ public class CategoryCommandHandler {
         if (val == null) return null;
         if (val instanceof Number n) return n.longValue();
         return Long.parseLong(val.toString());
+    }
+
+    private Integer toInteger(Object val) {
+        if (val == null) return null;
+        if (val instanceof Number n) return n.intValue();
+        return Integer.parseInt(val.toString());
     }
 }

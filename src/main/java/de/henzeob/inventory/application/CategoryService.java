@@ -9,6 +9,8 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -59,11 +61,36 @@ public class CategoryService {
         if (categoryRepository.findByShortCode(dto.shortCode).isPresent()) {
             throw new IllegalArgumentException("Kürzel bereits vergeben: " + dto.shortCode);
         }
+        if (dto.hue == null) {
+            dto.hue = generateHue();
+        }
         Category category = new Category();
         if (dto.id != null) category.id = dto.id;
         categoryMapper.updateEntity(category, dto);
         categoryRepository.persist(category);
         return categoryMapper.toDTO(category);
+    }
+
+    private int generateHue() {
+        List<Integer> hues = categoryRepository.findAllHues();
+        if (hues.isEmpty()) {
+            return 0;
+        }
+        List<Integer> sorted = new ArrayList<>(hues);
+        Collections.sort(sorted);
+        int n = sorted.size();
+        int bestMid = 0;
+        int bestGap = 0;
+        for (int i = 0; i < n; i++) {
+            int a = sorted.get(i);
+            int b = sorted.get((i + 1) % n);
+            int gap = (b - a + 360) % 360;
+            if (gap > bestGap) {
+                bestGap = gap;
+                bestMid = (a + gap / 2) % 360;
+            }
+        }
+        return bestMid;
     }
 
     @Transactional

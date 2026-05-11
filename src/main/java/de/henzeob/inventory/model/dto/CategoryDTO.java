@@ -13,6 +13,7 @@ public class CategoryDTO {
     @NotBlank(message = "Kürzel darf nicht leer und muss einmalig sein")
     public String shortCode;
 
+    public Integer hue;
     public Long version;
     public Instant createdAt = Instant.now();
     public Instant lastModified = Instant.now();

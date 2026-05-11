@@ -24,4 +24,11 @@ public class CategoryRepository implements PanacheRepositoryBase<Category, UUID>
     public Optional<Category> findByShortCode(String shortCode) {
         return find("shortCode", shortCode).firstResultOptional();
     }
+
+    @SuppressWarnings("unchecked")
+    public List<Integer> findAllHues() {
+        return getEntityManager()
+                .createQuery("SELECT c.hue FROM Category c")
+                .getResultList();
+    }
 }

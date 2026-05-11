@@ -19,6 +19,7 @@ public class CategoryMapper {
         dto.name = entity.name;
         dto.description = entity.description;
         dto.shortCode = entity.shortCode;
+        dto.hue = entity.hue;
         dto.version = entity.version;
         dto.createdAt = entity.createdAt;
         dto.lastModified = entity.lastModified;
@@ -31,6 +32,7 @@ public class CategoryMapper {
         entity.name = dto.name;
         entity.description = dto.description;
         entity.shortCode = dto.shortCode;
+        entity.hue = dto.hue;
         entity.lastModified = Instant.now(clock);
     }
 }
