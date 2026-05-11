@@ -44,7 +44,7 @@ public class CategoryCommandTest {
         return given()
                 .contentType("application/json")
                 .body(json)
-                .when().post("/commands")
+                .when().post("/api/v1/commands")
                 .then()
                 .statusCode(200);
     }

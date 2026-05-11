@@ -1,7 +1,6 @@
 package de.henzeob.inventory.repository;
 
 import de.henzeob.inventory.model.entity.Category;
-import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;

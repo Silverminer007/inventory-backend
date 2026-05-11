@@ -1,10 +1,8 @@
 package de.henzeob.inventory.model.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 public class CategoryDTO {
