@@ -18,6 +18,8 @@ jobs:
           fetch-depth: 0
 
       - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -61,3 +63,6 @@ jobs:
             (1–2 sentences: is the PR merge-ready, or should something be addressed first?)
 
             Be direct and specific. Always reference the exact file and line number.
+            
+            When you have completed the review, post it as a PR comment using:
+            gh pr comment ${{ github.event.pull_request.number }} --body "<your review>"
