@@ -1,5 +1,6 @@
 package de.henzeob.inventory.application;
 
+import de.henzeob.inventory.application.handler.CategoryCommandHandler;
 import de.henzeob.inventory.application.handler.ContainerCommandHandler;
 import de.henzeob.inventory.application.handler.ConflictResult;
 import de.henzeob.inventory.application.handler.ImageCommandHandler;
@@ -32,6 +33,9 @@ public class CommandService {
 
     @Inject
     ContainerCommandHandler containerCommandHandler;
+
+    @Inject
+    CategoryCommandHandler categoryCommandHandler;
 
     @Inject
     ImageCommandHandler imageCommandHandler;
@@ -140,6 +144,7 @@ public class CommandService {
         String name = type.name();
         if (name.startsWith("ITEM_")) return itemCommandHandler.handle(type, command, userId);
         if (name.startsWith("CONTAINER_")) return containerCommandHandler.handle(type, command, userId);
+        if (name.startsWith("CATEGORY_")) return categoryCommandHandler.handle(type, command, userId);
         if (name.startsWith("IMAGE_")) return imageCommandHandler.handle(type, command, userId);
         throw new IllegalArgumentException("No handler for command type: " + type);
     }

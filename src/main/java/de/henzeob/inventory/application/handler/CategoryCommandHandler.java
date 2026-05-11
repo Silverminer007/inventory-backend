@@ -61,7 +61,7 @@ public class CategoryCommandHandler {
                 .orElseThrow(() -> new IllegalArgumentException("Category not found: " + entityId));
 
         if (force || clientVersion == null || category.version.equals(clientVersion)) {
-            return applyUpdate(entityId, p);
+            return applyUpdate(entityId, p, category);
         }
 
         long versionGap = category.version - clientVersion;
@@ -116,12 +116,11 @@ public class CategoryCommandHandler {
         return changed;
     }
 
-    private CategoryDTO applyUpdate(UUID entityId, Map<String, Object> p) {
-        CategoryDTO dto = new CategoryDTO();
-        dto.id = entityId;
-        dto.name = (String) p.get("name");
-        dto.description = (String) p.get("description");
-        dto.shortCode = (String) p.get("shortCode");
+    private CategoryDTO applyUpdate(UUID entityId, Map<String, Object> p, Category existing) {
+        CategoryDTO dto = categoryMapper.toDTO(existing);
+        if (p.containsKey("name"))        dto.name = (String) p.get("name");
+        if (p.containsKey("description")) dto.description = (String) p.get("description");
+        if (p.containsKey("shortCode"))   dto.shortCode = (String) p.get("shortCode");
         dto.version = toLong(p.get("version"));
         return categoryService.updateCategory(entityId, dto);
     }

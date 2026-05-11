@@ -37,6 +37,8 @@ public class ContainerService {
 
         if (categoryId != null) {
             container.primaryCategory = categoryService.getCategoryEntity(categoryId);
+        } else {
+            container.primaryCategory = categoryService.getDefaultCategoryEntity();
         }
 
         if (parentContainerId != null) {

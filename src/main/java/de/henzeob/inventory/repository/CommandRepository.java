@@ -19,7 +19,7 @@ public class CommandRepository implements PanacheRepository<Command> {
     }
 
     public List<Command> findByUserAppliedSince(String userId, Instant since, int limit) {
-        return find("userId = ?1 and status = ?2 and appliedAt >= ?3",
+        return find("(userId = ?1 or userId = 'system') and status = ?2 and appliedAt >= ?3",
                 Sort.by("appliedAt"),
                 userId, CommandStatus.APPLIED, since)
                 .page(0, limit)
