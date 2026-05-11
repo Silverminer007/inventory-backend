@@ -237,6 +237,34 @@ public class CategoryCommandTest {
     }
 
     @Test
+    void categoryUpdate_duplicateShortCode_failed() {
+        createCategory("Short Code Owner", "SCO1");
+        String id = createCategory("Short Code Changer", "SCC1");
+        long ver = categoryVersion(id);
+
+        postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
+              "entityId":"%s",
+              "payload":{"shortCode":"SCO1","version":%d}}]
+            """.formatted(UUID.randomUUID(), id, ver))
+                .body("[0].status", is("FAILED"));
+    }
+
+    @Test
+    void categoryUpdate_sameShortCode_applied() {
+        // Updating to the entity's own current shortCode must not be rejected
+        String id = createCategory("Own ShortCode", "OSC1");
+        long ver = categoryVersion(id);
+
+        postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
+              "entityId":"%s",
+              "payload":{"shortCode":"OSC1","version":%d}}]
+            """.formatted(UUID.randomUUID(), id, ver))
+                .body("[0].status", is("APPLIED"));
+    }
+
+    @Test
     void categoryUpdate_nonExistent_failed() {
         postCommand("""
             [{"commandId":"%s","commandType":"CATEGORY_UPDATE",

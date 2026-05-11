@@ -15,6 +15,8 @@ import java.util.UUID;
 @Table(name = "commands")
 public class Command extends PanacheEntityBase {
 
+    public static final String SYSTEM_USER_ID = "system";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;

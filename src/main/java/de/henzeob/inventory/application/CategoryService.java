@@ -97,6 +97,10 @@ public class CategoryService {
     public CategoryDTO updateCategory(UUID id, CategoryDTO dto) {
         Category category = categoryRepository.findByIdOptional(id)
                 .orElseThrow(() -> new NotFoundException("Category not found"));
+        if (dto.shortCode != null && !dto.shortCode.equals(category.shortCode)
+                && categoryRepository.findByShortCode(dto.shortCode).isPresent()) {
+            throw new IllegalArgumentException("Short code already in use: " + dto.shortCode);
+        }
         categoryMapper.updateEntity(category, dto);
         categoryRepository.persist(category);
         return categoryMapper.toDTO(category);

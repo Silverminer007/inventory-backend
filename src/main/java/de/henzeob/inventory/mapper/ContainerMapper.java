@@ -40,11 +40,13 @@ public class ContainerMapper {
             dto.parent = parent;
         }
 
-        CategorySummaryDTO categoryInfo = new CategorySummaryDTO();
-        categoryInfo.id = container.primaryCategory.id;
-        categoryInfo.name = container.primaryCategory.name;
-        categoryInfo.shortCode = container.primaryCategory.shortCode;
-        dto.primaryCategory = categoryInfo;
+        if (container.primaryCategory != null) {
+            CategorySummaryDTO categoryInfo = new CategorySummaryDTO();
+            categoryInfo.id = container.primaryCategory.id;
+            categoryInfo.name = container.primaryCategory.name;
+            categoryInfo.shortCode = container.primaryCategory.shortCode;
+            dto.primaryCategory = categoryInfo;
+        }
 
         return dto;
     }
