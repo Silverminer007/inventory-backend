@@ -6,6 +6,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
@@ -14,6 +17,8 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.lessThan;
 
 @QuarkusTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -73,6 +78,35 @@ public class CategoryCommandTest {
             """.formatted(UUID.randomUUID(), id, newName, ver))
                 .body("[0].status", is("APPLIED"));
         return categoryVersion(id);
+    }
+
+    private void advanceCategoryHue(String id, int newHue) {
+        long ver = categoryVersion(id);
+        postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
+              "entityId":"%s",
+              "payload":{"hue":%d,"version":%d}}]
+            """.formatted(UUID.randomUUID(), id, newHue, ver))
+                .body("[0].status", is("APPLIED"));
+    }
+
+    private int computeExpectedHue(List<Integer> hues) {
+        if (hues.isEmpty()) return 0;
+        List<Integer> sorted = new ArrayList<>(hues);
+        Collections.sort(sorted);
+        int n = sorted.size();
+        int bestMid = 0;
+        int bestGap = 0;
+        for (int i = 0; i < n; i++) {
+            int a = sorted.get(i);
+            int b = sorted.get((i + 1) % n);
+            int gap = (b - a + 360) % 360;
+            if (gap > bestGap) {
+                bestGap = gap;
+                bestMid = (a + gap / 2) % 360;
+            }
+        }
+        return bestMid;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -283,6 +317,94 @@ public class CategoryCommandTest {
               "payload":{}}]
             """.formatted(UUID.randomUUID()))
                 .body("[0].status", is("FAILED"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Hue generation
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    void categoryCreate_noHue_snapshotContainsValidHue() {
+        postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
+              "payload":{"name":"Auto Hue Cat","shortCode":"AHC1"}}]
+            """.formatted(UUID.randomUUID()))
+                .body("[0].status", is("APPLIED"))
+                .body("[0].snapshot.hue", notNullValue())
+                .body("[0].snapshot.hue", greaterThanOrEqualTo(0))
+                .body("[0].snapshot.hue", lessThan(360));
+    }
+
+    @Test
+    void categoryCreate_withExplicitHue_hueIsPreserved() {
+        postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
+              "payload":{"name":"Explicit Hue Cat","shortCode":"EHC1","hue":42}}]
+            """.formatted(UUID.randomUUID()))
+                .body("[0].status", is("APPLIED"))
+                .body("[0].snapshot.hue", is(42));
+    }
+
+    @Test
+    void categoryCreate_autoHue_usesLargestGapAlgorithm() {
+        // Snapshot the existing hues to predict what the server will generate
+        List<Integer> existingHues = given()
+                .when().get("/api/v1/categories")
+                .then().statusCode(200)
+                .extract().jsonPath().getList("hue", Integer.class);
+
+        int expectedHue = computeExpectedHue(existingHues);
+
+        postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
+              "payload":{"name":"Gap Test Cat","shortCode":"GTC1"}}]
+            """.formatted(UUID.randomUUID()))
+                .body("[0].status", is("APPLIED"))
+                .body("[0].snapshot.hue", is(expectedHue));
+    }
+
+    @Test
+    void categoryUpdate_withHue_changesHue() {
+        String id = postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
+              "payload":{"name":"Hue Update Cat","shortCode":"HUC1","hue":100}}]
+            """.formatted(UUID.randomUUID()))
+                .body("[0].status", is("APPLIED"))
+                .extract().jsonPath().getString("[0].entityId");
+
+        long ver = categoryVersion(id);
+
+        postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
+              "entityId":"%s",
+              "payload":{"hue":200,"version":%d}}]
+            """.formatted(UUID.randomUUID(), id, ver))
+                .body("[0].status", is("APPLIED"))
+                .body("[0].snapshot.hue", is(200));
+    }
+
+    @Test
+    void categoryUpdate_staleVersion_conflictingHue_conflict() {
+        String id = postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
+              "payload":{"name":"Hue Conflict Cat","shortCode":"HCC1","hue":50}}]
+            """.formatted(UUID.randomUUID()))
+                .body("[0].status", is("APPLIED"))
+                .extract().jsonPath().getString("[0].entityId");
+
+        long staleVer = categoryVersion(id);
+        advanceCategoryHue(id, 150); // server changes hue to 150
+
+        // Client (stale) sends a different hue — must conflict
+        postCommand("""
+            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
+              "entityId":"%s",
+              "payload":{"hue":75,"version":%d}}]
+            """.formatted(UUID.randomUUID(), id, staleVer))
+                .body("[0].status", is("CONFLICT"))
+                .body("[0].conflictInfo.conflictingFields", contains("hue"))
+                .body("[0].conflictInfo.serverSnapshot.hue", is(150))
+                .body("[0].conflictInfo.clientPayload.hue", is(75));
     }
 
     // ═══════════════════════════════════════════════════════════════════════

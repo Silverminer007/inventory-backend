@@ -59,6 +59,15 @@ public class CategoryResourceTest {
     }
 
     @Test
+    void seededCategory_XX_hasHue210() {
+        given()
+                .when().get("/api/v1/categories/by-short-code/XX")
+                .then()
+                .statusCode(200)
+                .body("hue", is(210));
+    }
+
+    @Test
     void getByShortCode_notFound_returns404() {
         given()
                 .when().get("/api/v1/categories/by-short-code/NONEXISTENT")
