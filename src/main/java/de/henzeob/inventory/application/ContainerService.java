@@ -23,14 +23,23 @@ public class ContainerService {
     @Inject
     ContainerMapper containerMapper;
 
+    @Inject
+    CategoryService categoryService;
+
     public Container getContainer(UUID id, String userId) {
         return containerRepository.findByIdAndUser(id, userId)
                 .orElseThrow(() -> new NotFoundException("Container nicht gefunden"));
     }
 
     @Transactional
-    public Container createContainer(Container container, UUID parentContainerId, String userId) {
+    public Container createContainer(Container container, UUID parentContainerId, UUID categoryId, String userId) {
         container.userId = userId;
+
+        if (categoryId != null) {
+            container.primaryCategory = categoryService.getCategoryEntity(categoryId);
+        } else {
+            container.primaryCategory = categoryService.getDefaultCategoryEntity();
+        }
 
         if (parentContainerId != null) {
             Container parent = getContainer(parentContainerId, userId);
@@ -110,6 +119,10 @@ public class ContainerService {
         Container container = getContainer(id, userId);
 
         containerMapper.updateEntity(container, dto);
+
+        if (dto.primaryCategory != null && dto.primaryCategory.id != null) {
+            container.primaryCategory = categoryService.getCategoryEntity(dto.primaryCategory.id);
+        }
 
         containerRepository.persist(container);
 

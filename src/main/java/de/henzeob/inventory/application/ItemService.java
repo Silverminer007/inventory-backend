@@ -27,6 +27,9 @@ public class ItemService {
     @Inject
     ContainerService containerService;
 
+    @Inject
+    CategoryService categoryService;
+
     public List<ItemDTO> getAllItems(String userId) {
         return itemRepository.findByUser(userId).stream().map(itemMapper::toDTO).collect(Collectors.toList());
     }
@@ -46,6 +49,11 @@ public class ItemService {
 
         itemMapper.updateEntity(item, dto);
         setLocation(item, dto.containerId, userId);
+        if (dto.category != null && dto.category.id != null) {
+            item.category = categoryService.getCategoryEntity(dto.category.id);
+        } else {
+            item.category = categoryService.getDefaultCategoryEntity();
+        }
         itemRepository.insert(item);
 
         if (dto.tags != null && !dto.tags.isEmpty()) {
@@ -67,6 +75,9 @@ public class ItemService {
         Item item = itemRepository.findByIdAndUser(id, userId).orElseThrow(() -> new NotFoundException("Item nicht gefunden"));
 
         itemMapper.updateEntity(item, dto);
+        if (dto.category != null && dto.category.id != null) {
+            item.category = categoryService.getCategoryEntity(dto.category.id);
+        }
         item.lastModified = LocalDateTime.now();
 
         List<ItemTag> oldItemTags = ItemTag.find("item.id = ?1", dto.id).list();

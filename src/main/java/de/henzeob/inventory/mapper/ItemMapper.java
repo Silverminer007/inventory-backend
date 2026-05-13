@@ -1,5 +1,6 @@
 package de.henzeob.inventory.mapper;
 
+import de.henzeob.inventory.model.dto.CategorySummaryDTO;
 import de.henzeob.inventory.model.dto.ItemDTO;
 import de.henzeob.inventory.model.entity.Item;
 import de.henzeob.inventory.model.entity.ItemTag;
@@ -33,6 +34,14 @@ public class ItemMapper {
         // Computed fields
         dto.locationPath = item.getLocationPath();
         dto.containerType = item.getContainerType();
+
+        if (item.category != null) {
+            CategorySummaryDTO categoryInfo = new CategorySummaryDTO();
+            categoryInfo.id = item.category.id;
+            categoryInfo.name = item.category.name;
+            categoryInfo.shortCode = item.category.shortCode;
+            dto.category = categoryInfo;
+        }
 
         return dto;
     }

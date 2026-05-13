@@ -26,6 +26,11 @@ public class Container extends PanacheEntityBase {
     public String description;
 
     @NotNull
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
+    public Category primaryCategory;
+
+    @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "container_type", nullable = false)
     public ContainerType containerType;

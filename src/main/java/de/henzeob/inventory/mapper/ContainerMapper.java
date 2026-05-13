@@ -1,5 +1,6 @@
 package de.henzeob.inventory.mapper;
 
+import de.henzeob.inventory.model.dto.CategorySummaryDTO;
 import de.henzeob.inventory.model.dto.ContainerDTO;
 import de.henzeob.inventory.model.entity.Container;
 import de.henzeob.inventory.model.entity.ContainerType;
@@ -37,6 +38,14 @@ public class ContainerMapper {
             parent.name = container.parentContainer.name;
             parent.containerType = container.parentContainer.containerType.name();
             dto.parent = parent;
+        }
+
+        if (container.primaryCategory != null) {
+            CategorySummaryDTO categoryInfo = new CategorySummaryDTO();
+            categoryInfo.id = container.primaryCategory.id;
+            categoryInfo.name = container.primaryCategory.name;
+            categoryInfo.shortCode = container.primaryCategory.shortCode;
+            dto.primaryCategory = categoryInfo;
         }
 
         return dto;
