@@ -49,3 +49,6 @@ Thumbs.db
 
 data/*
 init/*
+
+*.sql
+!src/main/resources/db/migration/*.sql

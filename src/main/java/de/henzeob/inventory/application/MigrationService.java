@@ -7,18 +7,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.henzeob.inventory.model.dto.BoxRenameResultDTO;
 import de.henzeob.inventory.model.dto.CategoryAssignmentResultDTO;
+import de.henzeob.inventory.model.dto.CategoryDTO;
 import de.henzeob.inventory.model.dto.CommandDTO;
 import de.henzeob.inventory.model.dto.CommandResultDTO;
 import de.henzeob.inventory.model.dto.ContainerCategorizationResultDTO;
+import de.henzeob.inventory.model.dto.ContainerDTO;
+import de.henzeob.inventory.model.dto.ItemDTO;
 import de.henzeob.inventory.model.dto.MigrationResultDTO;
 import de.henzeob.inventory.model.entity.Category;
-import de.henzeob.inventory.model.entity.Container;
-import de.henzeob.inventory.model.entity.ContainerType;
-import de.henzeob.inventory.model.entity.Item;
-import de.henzeob.inventory.model.entity.ItemTag;
-import de.henzeob.inventory.repository.CategoryRepository;
-import de.henzeob.inventory.repository.ContainerRepository;
-import de.henzeob.inventory.repository.ItemRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.ConfigValue;
@@ -45,7 +41,6 @@ public class MigrationService {
 
     private static final Logger LOG = Logger.getLogger(MigrationService.class);
 
-    private static final String OLD_API_BASE = "https://items.kjg-st-barbara.de/items";
     private static final String CLIENT_ID = "migration";
     private static final int CATEGORIZE_BATCH_SIZE = 50;
 
@@ -77,6 +72,9 @@ public class MigrationService {
         "Ufer","Wald","Wand","Welle","Wind","Wolf","Wurm","Zahn","Zaun","Zelt","Zweig"
     };
 
+    @ConfigProperty(name = "inventory.migration.old-api-base", defaultValue = "https://items.kjg-st-barbara.de/items")
+    String oldApiBase;
+
     @ConfigProperty(name = "inventory.llm.api-key", defaultValue = "")
     ConfigValue anthropicApiKey;
 
@@ -87,13 +85,13 @@ public class MigrationService {
     CommandService commandService;
 
     @Inject
-    ItemRepository itemRepository;
+    ItemService itemService;
 
     @Inject
-    CategoryRepository categoryRepository;
+    CategoryService categoryService;
 
     @Inject
-    ContainerRepository containerRepository;
+    ContainerService containerService;
 
     public MigrationResultDTO importFromOldSystem(String userId) {
         List<OldRoom> rooms = fetch("/Room?limit=-1", OldRoom.class);
@@ -208,10 +206,10 @@ public class MigrationService {
             throw new IllegalStateException("ANTHROPIC_API_KEY not set");
         }
 
-        List<Item> allItems = itemRepository.findByUser(userId);
-        List<Item> toProcess = new ArrayList<>();
+        List<ItemDTO> allItems = itemService.getAllItems(userId);
+        List<ItemDTO> toProcess = new ArrayList<>();
         int skipped = 0;
-        for (Item item : allItems) {
+        for (ItemDTO item : allItems) {
             if (item.category != null && !Category.DEFAULT_SHORT_CODE.equals(item.category.shortCode)) {
                 skipped++;
             } else {
@@ -219,7 +217,7 @@ public class MigrationService {
             }
         }
 
-        List<Category> allCategories = categoryRepository.findAllSorted().stream()
+        List<CategoryDTO> allCategories = categoryService.getAllCategories().stream()
                 .filter(c -> !Category.DEFAULT_SHORT_CODE.equals(c.shortCode))
                 .toList();
 
@@ -236,12 +234,12 @@ public class MigrationService {
         }
 
         Set<String> validCategoryIds = new HashSet<>();
-        for (Category c : allCategories) {
+        for (CategoryDTO c : allCategories) {
             validCategoryIds.add(c.id.toString());
         }
 
         List<Map<String, Object>> categoriesJson = new ArrayList<>();
-        for (Category c : allCategories) {
+        for (CategoryDTO c : allCategories) {
             Map<String, Object> entry = new HashMap<>();
             entry.put("id", c.id.toString());
             entry.put("name", c.name);
@@ -250,13 +248,14 @@ public class MigrationService {
         }
 
         List<Map<String, String>> assignments = new ArrayList<>();
+        HttpClient httpClient = HttpClient.newHttpClient();
         int batchStart = 0;
         while (batchStart < toProcess.size()) {
             int batchEnd = Math.min(batchStart + CATEGORIZE_BATCH_SIZE, toProcess.size());
-            List<Item> batch = toProcess.subList(batchStart, batchEnd);
+            List<ItemDTO> batch = toProcess.subList(batchStart, batchEnd);
 
             List<Map<String, Object>> itemsJson = new ArrayList<>();
-            for (Item item : batch) {
+            for (ItemDTO item : batch) {
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("id", item.id.toString());
                 entry.put("name", item.name);
@@ -303,8 +302,7 @@ public class MigrationService {
                         .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
                         .build();
 
-                HttpClient client = HttpClient.newHttpClient();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
                 if (response.statusCode() != 200) {
                     LOG.errorf("categorizeItems: Anthropic API returned %d for batch %d/%d: %s",
@@ -351,8 +349,8 @@ public class MigrationService {
             batchStart = batchEnd;
         }
 
-        Map<String, Item> itemById = new HashMap<>();
-        for (Item item : toProcess) {
+        Map<String, ItemDTO> itemById = new HashMap<>();
+        for (ItemDTO item : toProcess) {
             itemById.put(item.id.toString(), item);
         }
 
@@ -362,7 +360,7 @@ public class MigrationService {
         for (Map<String, String> assignment : assignments) {
             String itemId = assignment.get("itemId");
             String categoryId = assignment.get("categoryId");
-            Item item = itemById.get(itemId);
+            ItemDTO item = itemById.get(itemId);
             if (item == null) {
                 LOG.warnf("categorizeItems: no loaded item found for id %s, skipping", itemId);
                 continue;
@@ -374,7 +372,7 @@ public class MigrationService {
             cmdPayload.put("position", item.position);
             cmdPayload.put("quantity", item.quantity);
             cmdPayload.put("barcode", item.barcode);
-            cmdPayload.put("tags", item.tags.stream().map(ItemTag::getTag).toList());
+            cmdPayload.put("tags", item.tags != null ? new ArrayList<>(item.tags) : List.of());
             cmdPayload.put("category", Map.of("id", categoryId));
             cmdPayload.put("force", true);
             CommandDTO cmd = buildCommand("ITEM_UPDATE", cmdPayload, baseTime.plusMillis(seq++));
@@ -403,31 +401,31 @@ public class MigrationService {
         ContainerCategorizationResultDTO result = new ContainerCategorizationResultDTO();
 
         // Load all items and group by container ID
-        List<Item> allItems = itemRepository.findByUser(userId);
-        Map<UUID, List<Item>> itemsByContainerId = new HashMap<>();
-        for (Item item : allItems) {
-            if (item.container != null) {
-                itemsByContainerId.computeIfAbsent(item.container.id, k -> new ArrayList<>()).add(item);
+        List<ItemDTO> allItems = itemService.getAllItems(userId);
+        Map<UUID, List<ItemDTO>> itemsByContainerId = new HashMap<>();
+        for (ItemDTO item : allItems) {
+            if (item.containerId != null) {
+                itemsByContainerId.computeIfAbsent(item.containerId, k -> new ArrayList<>()).add(item);
             }
         }
 
         // Phase 1: Boxes — dominant item category weighted by quantity
-        List<Container> boxes = containerRepository.findByTypeAndUser(ContainerType.BOX, userId);
+        List<ContainerDTO> boxes = containerService.getContainersByType("BOX", userId);
         LOG.infof("propagateCategoriesToContainers: found %d boxes", boxes.size());
 
         List<CommandDTO> commands = new ArrayList<>();
         Instant baseTime = Instant.now();
         long seq = 0;
 
-        for (Container box : boxes) {
-            List<Item> boxItems = itemsByContainerId.getOrDefault(box.id, List.of());
+        for (ContainerDTO box : boxes) {
+            List<ItemDTO> boxItems = itemsByContainerId.getOrDefault(box.id, List.of());
             if (boxItems.isEmpty()) {
                 result.boxesSkipped++;
                 continue;
             }
 
             Map<UUID, Integer> categoryWeight = new HashMap<>();
-            for (Item item : boxItems) {
+            for (ItemDTO item : boxItems) {
                 if (item.category != null && !Category.DEFAULT_SHORT_CODE.equals(item.category.shortCode)) {
                     categoryWeight.merge(item.category.id, item.quantity != null ? item.quantity : 1, Integer::sum);
                 }
@@ -462,21 +460,21 @@ public class MigrationService {
         }
 
         // Phase 2: Shelves — dominant category by child-box votes (1 vote per box)
-        Map<UUID, List<Container>> boxesByParentId = new HashMap<>();
-        for (Container box : boxes) {
-            if (box.parentContainer != null) {
-                boxesByParentId.computeIfAbsent(box.parentContainer.id, k -> new ArrayList<>()).add(box);
+        Map<UUID, List<ContainerDTO>> boxesByParentId = new HashMap<>();
+        for (ContainerDTO box : boxes) {
+            if (box.parentContainerId != null) {
+                boxesByParentId.computeIfAbsent(box.parentContainerId, k -> new ArrayList<>()).add(box);
             }
         }
 
-        List<Container> shelves = containerRepository.findByTypeAndUser(ContainerType.SHELF, userId);
+        List<ContainerDTO> shelves = containerService.getContainersByType("SHELF", userId);
         LOG.infof("propagateCategoriesToContainers: found %d shelves", shelves.size());
 
-        for (Container shelf : shelves) {
-            List<Container> childBoxes = boxesByParentId.getOrDefault(shelf.id, List.of());
+        for (ContainerDTO shelf : shelves) {
+            List<ContainerDTO> childBoxes = boxesByParentId.getOrDefault(shelf.id, List.of());
 
             Map<UUID, Integer> categoryVotes = new HashMap<>();
-            for (Container box : childBoxes) {
+            for (ContainerDTO box : childBoxes) {
                 if (box.primaryCategory != null && !Category.DEFAULT_SHORT_CODE.equals(box.primaryCategory.shortCode)) {
                     categoryVotes.merge(box.primaryCategory.id, 1, Integer::sum);
                 }
@@ -536,14 +534,14 @@ public class MigrationService {
 
     public BoxRenameResultDTO renameBoxes(String userId) {
         BoxRenameResultDTO result = new BoxRenameResultDTO();
-        List<Container> boxes = containerRepository.findByTypeAndUser(ContainerType.BOX, userId);
+        List<ContainerDTO> boxes = containerService.getContainersByType("BOX", userId);
         LOG.infof("renameBoxes: found %d boxes", boxes.size());
 
         List<CommandDTO> commands = new ArrayList<>();
         Instant baseTime = Instant.now();
         long seq = 0;
 
-        for (Container box : boxes) {
+        for (ContainerDTO box : boxes) {
             String shortCode = box.primaryCategory != null ? box.primaryCategory.shortCode : Category.DEFAULT_SHORT_CODE;
             String newName = generateBoxName(shortCode);
 
@@ -595,7 +593,7 @@ public class MigrationService {
         try {
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(OLD_API_BASE + path))
+                    .uri(URI.create(oldApiBase + path))
                     .GET()
                     .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
