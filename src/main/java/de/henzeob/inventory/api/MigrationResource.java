@@ -1,6 +1,7 @@
 package de.henzeob.inventory.api;
 
 import de.henzeob.inventory.application.MigrationService;
+import de.henzeob.inventory.model.dto.BoxRenameResultDTO;
 import de.henzeob.inventory.model.dto.CategoryAssignmentResultDTO;
 import de.henzeob.inventory.model.dto.ContainerCategorizationResultDTO;
 import de.henzeob.inventory.model.dto.MigrationResultDTO;
@@ -65,6 +66,16 @@ public class MigrationResource {
     public Response propagateCategoriesToContainers() {
         checkMigrationEnabled();
         ContainerCategorizationResultDTO result = migrationService.propagateCategoriesToContainers(getCurrentUserId());
+        return Response.ok(result).build();
+    }
+
+    @POST
+    @Path("/rename-boxes")
+    @Operation(summary = "Rename all boxes with generated names",
+            description = "Assigns a new CATEGORYSHORTCODE-ADJECTIVE-NOUN name to every box and returns the old→new mapping for label updates")
+    public Response renameBoxes() {
+        checkMigrationEnabled();
+        BoxRenameResultDTO result = migrationService.renameBoxes(getCurrentUserId());
         return Response.ok(result).build();
     }
 }

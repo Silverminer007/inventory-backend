@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.henzeob.inventory.model.dto.BoxRenameResultDTO;
 import de.henzeob.inventory.model.dto.CategoryAssignmentResultDTO;
 import de.henzeob.inventory.model.dto.CommandDTO;
 import de.henzeob.inventory.model.dto.CommandResultDTO;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @ApplicationScoped
 public class MigrationService {
@@ -46,6 +48,34 @@ public class MigrationService {
     private static final String OLD_API_BASE = "https://items.kjg-st-barbara.de/items";
     private static final String CLIENT_ID = "migration";
     private static final int CATEGORIZE_BATCH_SIZE = 50;
+
+    private static final String[] ADJECTIVES = {
+        "alt","arm","blass","blau","blind","breit","braun","bunt","derb","dick",
+        "dicht","dumpf","dünn","dunkel","echt","eng","fein","fest","fett","flach",
+        "flink","frech","frei","frisch","froh","gelb","glatt","grau","groß","grob",
+        "grün","gut","hart","heiß","hell","hoch","hohl","jung","kahl","kalt","klar",
+        "klein","klug","knapp","krumm","kühl","kurz","lahm","lang","laut","leer",
+        "leicht","leise","lila","locker","matt","mild","mutig","nass","nett","neu",
+        "offen","platt","prall","rau","reich","rein","rosa","rot","ruhig","rund",
+        "satt","sanft","sauber","sauer","scharf","scheu","schief","schmal","schnell",
+        "schwach","schwarz","schwer","spitz","stark","steif","steil","still","stolz",
+        "straff","stumpf","süß","tapfer","tief","träge","treu","trocken","voll",
+        "wach","warm","weich","weiß","weit","wild","wütend","zäh","zahm","zart",
+        "blank","mürbe"
+    };
+    private static final String[] NOUNS = {
+        "Adler","Amboss","Anker","Ast","Bach","Ball","Baum","Berg","Blatt","Blitz",
+        "Boot","Brand","Brücke","Burg","Dach","Dorn","Draht","Dunst","Eis","Faden",
+        "Falke","Fels","Feld","Feuer","Fisch","Fluss","Frosch","Funke","Garn",
+        "Gipfel","Glas","Gold","Gras","Griff","Hahn","Hammer","Harz","Holz","Horn",
+        "Hund","Hut","Igel","Kahn","Kamm","Keil","Kern","Kette","Kiefer","Klang",
+        "Knoten","Korb","Kraft","Kreis","Krug","Lachs","Lamm","Laub","Licht","Luchs",
+        "Mast","Mond","Moos","Nagel","Nebel","Netz","Nord","Pfad","Pfeil","Pilz",
+        "Platz","Quarz","Rad","Regen","Ring","Sand","Schall","Schlag","Schloss",
+        "Schnee","Schuh","Seil","Speer","Spur","Stab","Stahl","Stamm","Stein",
+        "Stern","Stift","Strom","Sturm","Tal","Teer","Tier","Ton","Topf","Turm",
+        "Ufer","Wald","Wand","Welle","Wind","Wolf","Wurm","Zahn","Zaun","Zelt","Zweig"
+    };
 
     @ConfigProperty(name = "inventory.llm.api-key", defaultValue = "")
     ConfigValue anthropicApiKey;
@@ -494,6 +524,60 @@ public class MigrationService {
                 .forEach(r -> LOG.errorf("propagateCategoriesToContainers: failed command: %s, %s", r.error, r.entityId));
         LOG.infof("propagateCategoriesToContainers: finished — %d applied, %d failed",
                 result.commandsApplied, result.commandsFailed);
+        return result;
+    }
+
+    private String generateBoxName(String shortCode) {
+        ThreadLocalRandom rnd = ThreadLocalRandom.current();
+        String adj = ADJECTIVES[rnd.nextInt(ADJECTIVES.length)];
+        String noun = NOUNS[rnd.nextInt(NOUNS.length)];
+        return shortCode + "-" + adj + "-" + noun;
+    }
+
+    public BoxRenameResultDTO renameBoxes(String userId) {
+        BoxRenameResultDTO result = new BoxRenameResultDTO();
+        List<Container> boxes = containerRepository.findByTypeAndUser(ContainerType.BOX, userId);
+        LOG.infof("renameBoxes: found %d boxes", boxes.size());
+
+        List<CommandDTO> commands = new ArrayList<>();
+        Instant baseTime = Instant.now();
+        long seq = 0;
+
+        for (Container box : boxes) {
+            String shortCode = box.primaryCategory != null ? box.primaryCategory.shortCode : Category.DEFAULT_SHORT_CODE;
+            String newName = generateBoxName(shortCode);
+
+            BoxRenameResultDTO.RenameEntry entry = new BoxRenameResultDTO.RenameEntry();
+            entry.oldName = box.name;
+            entry.newName = newName;
+            result.renames.add(entry);
+
+            Map<String, Object> cmdPayload = new HashMap<>();
+            cmdPayload.put("name", newName);
+            cmdPayload.put("description", box.description);
+            cmdPayload.put("position", box.position);
+            cmdPayload.put("location", box.location);
+            if (box.primaryCategory != null) {
+                cmdPayload.put("primaryCategory", Map.of("id", box.primaryCategory.id.toString()));
+            }
+            cmdPayload.put("force", true);
+            CommandDTO cmd = buildCommand("CONTAINER_UPDATE", cmdPayload, baseTime.plusMillis(seq++));
+            cmd.entityId = box.id;
+            commands.add(cmd);
+            result.boxesRenamed++;
+        }
+
+        if (commands.isEmpty()) {
+            return result;
+        }
+
+        List<CommandResultDTO> results = commandService.processBatch(commands, userId);
+        result.commandsApplied = (int) results.stream().filter(r -> "APPLIED".equals(r.status)).count();
+        result.commandsFailed = (int) results.stream().filter(r -> "FAILED".equals(r.status)).count();
+        results.stream().filter(r -> "FAILED".equals(r.status))
+                .forEach(r -> LOG.errorf("renameBoxes: failed command: %s, %s", r.error, r.entityId));
+        LOG.infof("renameBoxes: finished — %d renamed, %d applied, %d failed",
+                result.boxesRenamed, result.commandsApplied, result.commandsFailed);
         return result;
     }
 
