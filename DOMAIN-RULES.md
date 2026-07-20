@@ -11,11 +11,11 @@ Der ROOT Command wird Serverseitig einmal angelegt:
 
 ```json
 {
-  "id": "111111111111-1111-1111-1111-111111111111",
+  "id": "11111111-1111-1111-1111-111111111111",
   "command_type": "CONTAINER_CREATE",
   "command_version": 1,
   "payload": {
-    "id": "111111111111-1111-1111-1111-111111111111",
+    "id": "11111111-1111-1111-1111-111111111111",
     "name": "Root Container",
     "created_at": "1970-01-01T00:00:00"
   }
@@ -118,13 +118,14 @@ Pflichtfelder:
 
 Weitere erlaubte Felder (Optional):
 
-| Feld        | Typ                                                                     |
-|-------------|-------------------------------------------------------------------------|
-| name        | string (not blank, min 3. chars)                                        |
-| parent      | UUID eines existierenden Containers. Keine Self oder Circular Reference |
-| category    | UUID einer existierenden Category                                       |
-| description | String (Multiline allowed)                                              |
-| position    | String                                                                  |
+| Feld          | Typ                                                                     |
+|---------------|-------------------------------------------------------------------------|
+| name          | string (not blank, min 3. chars)                                        |
+| parent        | UUID eines existierenden Containers. Keine Self oder Circular Reference |
+| category      | UUID einer existierenden Category                                       |
+| description   | String (Multiline allowed)                                              |
+| position      | String                                                                  |
+| primary_image | UUID eines Item_Images, dessen item feld auf dieses item zeigt          |
 
 ### CONTAINER_DELETE
 
@@ -162,12 +163,12 @@ Pflichtfelder:
 
 Weitere erlaubte Felder (Optional):
 
-| Feld        | Typ                                                  |
-|-------------|------------------------------------------------------|
-| name        | string (not blank, min 3. chars)                     |
-| shortcode   | string max. 4 chars                                  |
-| description | String (Multiline allowed)                           |
-| hue         | int. Hue on the color circle for displaying purposes |
+| Feld        | Typ                                                                   |
+|-------------|-----------------------------------------------------------------------|
+| name        | string (not blank, min 3. chars)                                      |
+| shortcode   | string max. 4 chars                                                   |
+| description | String (Multiline allowed)                                            |
+| hue         | int. Hue on the color circle for displaying purposes. 0 <= hue <= 360 |
 
 ### CATEGORY_DELETE
 
@@ -255,7 +256,7 @@ Clients sollten die Bilder schon vor dem Hochladen komprimieren.
 #### fetchCommands
 
 Der Server muss verifizieren, dass since existiert und gibt sonst 404 zurück.
-Ist since nicht gesetzt oder = null, dann werden ALLE Commands zurückgegeben.
+Ist since nicht gesetzt werden ALLE Commands zurückgegeben.
 
 Wenn since = head, dann wird eine leere Liste zurückgegeben.
 
@@ -309,6 +310,7 @@ Option b) Ist technisch am einfachsten, kann aber für den User unerwartetes ode
 Option c) Ist technisch auch aufwändig (UI), bietet aber die beste UX
 
 ==> Den User zwischen Option b) und c) wählen lassen und LOKAL die entsprechenden Commands bearbeiten (NUR ERLAUBT BEVOR SYNC)
+TODO: Bisher unter Spezifiziert. Muss eindeutiger gefasst werden
 
 # Test Cases
 
@@ -329,26 +331,37 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 10. ITEM_CREATE mit name mit 2 chars → fails
 11. ITEM_CREATE ohne container → fails
 12. ITEM_CREATE mit nicht existierenden container, aber valid UUID → fails
-13. ITEM_CREATE mit id, aber kein valid UUID → fails
-14. ITEM_CREATE mit container, aber kein valid UUID → fails
-15. ITEM_CREATE mit quantity = 0 → fails
-16. ITEM_CREATE mit created_at = 3000-01-01T00:00:00 → fails
-17. ITEM_CREATE mit created_at = 2000-01-01T00:00:00 → succeeds
-18. ITEM_UPDATE ohne ID → fails
-19. ITEM_UPDATE ohne name → succeeds
-20. ITEM_UPDATE mit blank name → fails
-21. ITEM_UPDATE mit name mit 2 chars → fails
-22. ITEM_UPDATE ohne container → fails
-23. ITEM_UPDATE mit nicht existierenden container, aber valid UUID → fails
-24. ITEM_UPDATE mit id, aber kein valid UUID → fails
-25. ITEM_UPDATE mit container, aber kein valid UUID → fails
-26. ITEM_UPDATE mit quantity = 0 → fails
-27. ITEM_UPDATE mit created_at = 3000-01-01T00:00:00 → fails
-28. ITEM_UPDATE mit created_at = 2000-01-01T00:00:00 → fails
-29. ITEM_UPDATE mit created_at = '' → fails
-30. ITEM_DELETE ohne id → fails
-31. ITEM_DELETE mit ungültiger id, aber valid UUID → fails
-32. ITEM_CREATE mit nur pflichtfeldern → succeeds
+13. ITEM_CREATE mit nicht existierender category, aber valid UUID → fails
+14. ITEM_CREATE mit category = valid UUID einer existierenden Category → succeeds
+15. ITEM_CREATE mit id, aber kein valid UUID → fails
+16. ITEM_CREATE mit container, aber kein valid UUID → fails
+17. ITEM_CREATE mit quantity = 0 → fails
+18. ITEM_CREATE mit created_at = 3000-01-01T00:00:00 → fails
+19. ITEM_CREATE mit created_at = 2000-01-01T00:00:00 → succeeds
+20. ITEM_UPDATE ohne ID → fails
+21. ITEM_UPDATE ohne name → succeeds 
+22. ITEM_CREATE → ITEM_UPDATE ohne quantity → succeeds 
+23. ITEM_CREATE → ITEM_UPDATE ohne category → succeeds 
+24. ITEM_CREATE → ITEM_UPDATE ohne description → succeeds 
+25. ITEM_CREATE → ITEM_UPDATE ohne position → succeeds 
+26. ITEM_CREATE → ITEM_UPDATE ohne primary_image → succeeds 
+27. ITEM_CREATE → ITEM_UPDATE mit nur id (alle anderen Felder weggelassen) → succeeds, Snapshot unverändert
+28. ITEM_UPDATE mit blank name → fails
+29. ITEM_UPDATE mit name mit 2 chars → fails
+30. ITEM_UPDATE ohne container → succeeds
+31. ITEM_UPDATE mit nicht existierenden container, aber valid UUID → fails
+32. ITEM_UPDATE mit id, aber kein valid UUID → fails
+33. ITEM_UPDATE mit container, aber kein valid UUID → fails 
+34. ITEM_UPDATE mit nicht existierender category, aber valid UUID → fails 
+35. ITEM_UPDATE mit category = valid UUID einer existierenden Category → succeeds 
+36. ITEM_UPDATE mit category, aber kein valid UUID → fails
+37. ITEM_UPDATE mit quantity = 0 → fails
+38. ITEM_UPDATE mit created_at = 3000-01-01T00:00:00 → fails
+39. ITEM_UPDATE mit created_at = 2000-01-01T00:00:00 → fails
+40. ITEM_UPDATE mit created_at = '' → fails
+41. ITEM_DELETE ohne id → fails
+42. ITEM_DELETE mit ungültiger id, aber valid UUID → fails
+43. ITEM_CREATE mit nur pflichtfeldern → succeeds
 
 ## Container Tests
 Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der Berechnete Snapshot mit der Erwartung übereinstimmen
@@ -363,25 +376,34 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 9. CONTAINER_CREATE mit blank name → fails
 10. CONTAINER_CREATE mit name mit 2 chars → fails
 11. CONTAINER_CREATE ohne parent → fails
-12. CONTAINER_CREATE mit nicht existierenden parent, aber valid UUID → fails
-13. CONTAINER_CREATE mit id, aber kein valid UUID → fails
-14. CONTAINER_CREATE mit parent, aber kein valid UUID → fails
-15. CONTAINER_CREATE mit created_at = 3000-01-01T00:00:00 → fails
-16. CONTAINER_CREATE mit created_at = 2000-01-01T00:00:00 → succeeds
-17. CONTAINER_UPDATE ohne ID → fails
-18. CONTAINER_UPDATE ohne name → succeeds
-19. CONTAINER_UPDATE mit blank name → fails
-20. CONTAINER_UPDATE mit name mit 2 chars → fails
-21. CONTAINER_UPDATE ohne parent → fails
-22. CONTAINER_UPDATE mit nicht existierenden parent, aber valid UUID → fails
-23. CONTAINER_UPDATE mit id, aber kein valid UUID → fails
-24. CONTAINER_UPDATE mit parent, aber kein valid UUID → fails
-25. CONTAINER_UPDATE mit created_at = 3000-01-01T00:00:00 → fails
-26. CONTAINER_UPDATE mit created_at = 2000-01-01T00:00:00 → fails
-27. CONTAINER_UPDATE mit created_at = '' → fails
-28. CONTAINER_DELETE ohne id → fails
-29. CONTAINER_DELETE mit ungültiger id, aber valid UUID → fails
-30. CONTAINER_CREATE mit nur pflichtfeldern → succeeds
+12. CONTAINER_CREATE mit nicht existierenden parent, aber valid UUID → fails 
+13. CONTAINER_CREATE mit nicht existierender category, aber valid UUID → fails 
+14. CONTAINER_CREATE mit category = valid UUID einer existierenden Category → succeeds
+15. CONTAINER_CREATE mit id, aber kein valid UUID → fails
+16. CONTAINER_CREATE mit parent, aber kein valid UUID → fails
+17. CONTAINER_CREATE mit created_at = 3000-01-01T00:00:00 → fails
+18. CONTAINER_CREATE mit created_at = 2000-01-01T00:00:00 → succeeds
+19. CONTAINER_UPDATE ohne ID → fails
+20. CONTAINER_UPDATE ohne name → succeeds 
+21. CONTAINER_CREATE → CONTAINER_UPDATE ohne category → succeeds 
+22. CONTAINER_CREATE → CONTAINER_UPDATE ohne description → succeeds 
+23. CONTAINER_CREATE → CONTAINER_UPDATE ohne position → succeeds 
+24. CONTAINER_CREATE → CONTAINER_UPDATE mit nur id → succeeds, Snapshot unverändert
+25. CONTAINER_UPDATE mit blank name → fails
+26. CONTAINER_UPDATE mit name mit 2 chars → fails
+27. CONTAINER_UPDATE ohne parent → succeeds
+28. CONTAINER_UPDATE mit nicht existierenden parent, aber valid UUID → fails 
+29. CONTAINER_UPDATE mit nicht existierender category, aber valid UUID → fails 
+30. CONTAINER_UPDATE mit category = valid UUID einer existierenden Category → succeeds 
+31. CONTAINER_UPDATE mit category, aber kein valid UUID → fails
+32. CONTAINER_UPDATE mit id, aber kein valid UUID → fails
+33. CONTAINER_UPDATE mit parent, aber kein valid UUID → fails
+34. CONTAINER_UPDATE mit created_at = 3000-01-01T00:00:00 → fails
+35. CONTAINER_UPDATE mit created_at = 2000-01-01T00:00:00 → fails
+36. CONTAINER_UPDATE mit created_at = '' → fails
+37. CONTAINER_DELETE ohne id → fails
+38. CONTAINER_DELETE mit ungültiger id, aber valid UUID → fails
+39. CONTAINER_CREATE mit nur pflichtfeldern → succeeds
 
 ## Category Tests
 Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der Berechnete Snapshot mit der Erwartung übereinstimmen
@@ -403,20 +425,32 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 16. CATEGORY_CREATE mit created_at = 3000-01-01T00:00:00 → fails
 17. CATEGORY_CREATE mit created_at = 2000-01-01T00:00:00 → succeeds
 18. CATEGORY_UPDATE ohne ID → fails
-19. CATEGORY_UPDATE ohne name → succeeds
-20. CATEGORY_UPDATE mit blank name → fails
-21. CATEGORY_UPDATE mit name mit 2 chars → fails
-22. CATEGORY_UPDATE ohne shortcode → fails
-23. CATEGORY_UPDATE mit blank shortcode → fails
-24. CATEGORY_UPDATE mit shortcode mit 2 chars → succeeds
-25. CATEGORY_UPDATE mit shortcode mit 5 chars → fails
-26. CATEGORY_UPDATE mit id, aber kein valid UUID → fails
-27. CATEGORY_UPDATE mit created_at = 3000-01-01T00:00:00 → fails
-28. CATEGORY_UPDATE mit created_at = 2000-01-01T00:00:00 → fails
-29. CATEGORY_UPDATE mit created_at = '' → fails
-30. CATEGORY_DELETE ohne id → fails
-31. CATEGORY_DELETE mit ungültiger id, aber valid UUID → fails
-32. CATEGORY_CREATE mit nur pflichtfeldern → succeeds
+19. CATEGORY_CREATE → CATEGORY_UPDATE ohne description → succeeds 
+20. CATEGORY_CREATE → CATEGORY_UPDATE ohne hue → succeeds 
+21. CATEGORY_CREATE → CATEGORY_UPDATE mit nur id → succeeds, Snapshot unverändert 
+22. CATEGORY_CREATE mit hue = 0 → succeeds 
+23. CATEGORY_CREATE mit hue = 360 → succeeds
+24. CATEGORY_CREATE mit hue = 361 → fails 
+25. CATEGORY_CREATE mit hue = -1 → fails 
+26. CATEGORY_CREATE ohne hue → succeeds (bleibt optional)
+27. CATEGORY_UPDATE ohne name → succeeds
+28. CATEGORY_UPDATE mit blank name → fails
+29. CATEGORY_UPDATE mit name mit 2 chars → fails
+30. CATEGORY_UPDATE ohne shortcode → succeeds
+31. CATEGORY_UPDATE mit blank shortcode → fails
+32. CATEGORY_UPDATE mit shortcode mit 2 chars → succeeds
+33. CATEGORY_UPDATE mit shortcode mit 5 chars → fails
+34. CATEGORY_UPDATE mit id, aber kein valid UUID → fails
+35. CATEGORY_UPDATE mit created_at = 3000-01-01T00:00:00 → fails
+36. CATEGORY_UPDATE mit created_at = 2000-01-01T00:00:00 → fails
+37. CATEGORY_UPDATE mit created_at = '' → fails 
+38. CATEGORY_UPDATE mit hue = 0 → succeeds 
+39. CATEGORY_UPDATE mit hue = 360 → je nach Definition succeeds oder fails (Grenzfall klären)
+40. CATEGORY_UPDATE mit hue = 361 → fails 
+41. CATEGORY_UPDATE mit hue = -1 → fails
+42. CATEGORY_DELETE ohne id → fails
+43. CATEGORY_DELETE mit ungültiger id, aber valid UUID → fails
+44. CATEGORY_CREATE mit nur pflichtfeldern → succeeds
 
 ## Container Image Tests
 Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der Berechnete Snapshot mit der Erwartung übereinstimmen
@@ -478,15 +512,25 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 29. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → CONTAINER_UPDATE (primary_image) → CONTAINER_IMAGE_DELETE → fails
 30. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → CONTAINER_UPDATE (primary_image) → CONTAINER_UPDATE (primary_image = null) → CONTAINER_IMAGE_DELETE → succeeds
 31. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → CONTAINER_UPDATE (primary_image) → CONTAINER_UPDATE (primary_image = null) → CONTAINER_IMAGE_DELETE → CONTAINER_DELETE → succeeds
-32. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → succeeds
+32. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → succeeds 
+33. CATEGORY_CREATE → ITEM_CREATE (category = nicht existierende, aber valide UUID) → fails 
+34. CATEGORY_CREATE → CONTAINER_CREATE (category = nicht existierende, aber valide UUID) → fails 
+35. ITEM_CREATE → ITEM_CREATE (zweites item) → ITEM_IMAGE_CREATE (item = erstes item) → ITEM_UPDATE (zweites item, primary_image = image des ersten items) → fails 
+36. ITEM_CREATE → ITEM_UPDATE (primary_image = nicht existierende, aber valide UUID) → fails 
+37. ITEM_CREATE → ITEM_UPDATE (primary_image, aber kein valid UUID) → fails 
+38. ITEM_CREATE → ITEM_IMAGE_CREATE (item) → ITEM_IMAGE_CREATE (item, zweites Bild) → ITEM_UPDATE (primary_image = zweites Bild) → succeeds 
+39. ITEM_CREATE → ITEM_IMAGE_CREATE (item eines anderen, bereits existierenden Items) → ITEM_UPDATE (primary_image = dieses fremde Bild) → fails 
+40. CONTAINER_CREATE → CONTAINER_CREATE (zweiter container) → CONTAINER_IMAGE_CREATE (container = erster container) → CONTAINER_UPDATE (zweiter container, primary_image = image des ersten containers) → fails 
+41. CONTAINER_CREATE → CONTAINER_UPDATE (primary_image = nicht existierende, aber valide UUID) → fails 
+42. CONTAINER_CREATE → CONTAINER_UPDATE (primary_image, aber kein valid UUID) → fails
 
 ## Command Tests
 1. Alle command_type mit command_version=1 -> succeeds
 2. Alle command_type mit command_version=0 -> fails
 3. Alle command_type mit command_version=2 -> fails
 4. Alle command_type ohne command_version -> fails
-5. command_type = CONTAINER_IMAGE_DELETE -> fails
-6. command_type = ITEM_IMAGE_DELETE -> fails
+5. command_type = CONTAINER_IMAGE_UPDATE -> fails (invalid command_type)
+6. command_type = ITEM_IMAGE_UPDATE -> fails (invalid command_type)
 7. ohne id -> fails
 8. mit id, aber keine gültige UUID -> fails
 
@@ -502,10 +546,10 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 9. applyCommands?head=111111111111-1111-1111-1111-111111 <1 (valid) command im payload> -> applyCommands?head=111111111111-1111-1111-1111-111111 -> 409
 10. fetchCommands?since=null -> 400
 11. fetchCommands?since=123123 -> 400
-12. fetchCommands?since=999999999999-9999-9999-9999-999999999999 -> 404
-13. fetchCommands?since=111111111111-1111-1111-1111-111111111111 -> 200
+12. fetchCommands?since=99999999-9999-9999-9999-999999999999 -> 404
+13. fetchCommands?since=11111111-1111-1111-1111-111111111111 -> 200
 14. fetchCommands -> 200
 15. Multi-Step
 a. head = fetchCommands.last.id
 b. applyCommands?head=head <1 valid command in payload>
-c. fetchCommands?since=111111111111-1111-1111-1111-111111111111 -> nach head suchen -> child = new command id?
+c. fetchCommands?since=11111111-1111-1111-1111-111111111111 -> nach head suchen -> child = new command id?
