@@ -77,10 +77,31 @@ jobs:
         run: npm install -g @usebruno/cli
 
       - name: 🐘 Start fresh Postgres + MinIO
-        run: docker compose up -d postgres minio minio-init
+        run: docker compose up -d postgres minio
 
       - name: 🏗️ Build application
         run: ./mvnw -B package -DskipTests
+
+      - name: ⏳ Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose exec -T postgres pg_isready -U inventory -d inventory > /dev/null 2>&1; then
+              echo "Postgres ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "Postgres did not become ready"; docker compose logs postgres; exit 1
+
+      - name: 🪣 Create MinIO bucket
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network host --entrypoint sh minio/mc -c \
+              "mc alias set local http://localhost:10000 minioadmin minioadmin && mc mb --ignore-existing local/inventory-images && mc anonymous set download local/inventory-images"; then
+              echo "Bucket ready"; exit 0
+            fi
+            echo "Retrying MinIO bucket setup..."; sleep 2
+          done
+          echo "MinIO bucket setup failed"; docker compose logs minio; exit 1
 
       - name: 🚀 Start backend against the fresh database
         run: |
