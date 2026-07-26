@@ -6,6 +6,18 @@ Wurde ein Command einmal erfolgreich an den Server gesendet, darf er nicht mehr 
 
 Die Commands werden in einer doppelt verketteten Liste gespeichert. Jeder Command hat also einen Vorgänger und einen Nachfolger. Ausnahmen bilden nur der "Root" Command und der aktuelle HEAD.
 Wurde einmal ein child bzw parent command gesetzt, darf dieser nicht mehr verändert werden.
+Bei der Übertragung wird die Doppelt Verkettete Liste wie folgt umgesetzt:
+```json
+{
+  [
+    {
+      "parent": string,
+      "child": string,
+      "command": <Command Object>
+    }
+  ]
+}
+```
 
 Der ROOT Command wird Serverseitig einmal angelegt:
 
@@ -98,15 +110,15 @@ Pflichtfelder:
 | name       | string (not blank, min 3. chars)                                        |
 | parent     | UUID eines existierenden Containers. Keine Self oder Circular Reference |
 | created_at | Timestamp before now                                                    |
-TODO: Braucht es hier ein type Feld um zwischen RAUM, REGAL und KISTE zu unterscheiden??
 
 Weitere erlaubte Felder (Optional):
 
-| Feld        | Typ                               |
-|-------------|-----------------------------------|
-| description | String (Multiline allowed)        |
-| position    | String                            |
-| category    | UUID einer existierenden Category |
+| Feld        | Typ                                                                                       |
+|-------------|-------------------------------------------------------------------------------------------|
+| description | String (Multiline allowed)                                                                |
+| position    | String                                                                                    |
+| category    | UUID einer existierenden Category                                                         |
+| type        | string. Clients könnten hier ROOM, SHELF oder BOX speichern. Kein Server Side enforcement |
 
 ### CONTAINER_UPDATE
 
@@ -118,14 +130,15 @@ Pflichtfelder:
 
 Weitere erlaubte Felder (Optional):
 
-| Feld          | Typ                                                                     |
-|---------------|-------------------------------------------------------------------------|
-| name          | string (not blank, min 3. chars)                                        |
-| parent        | UUID eines existierenden Containers. Keine Self oder Circular Reference |
-| category      | UUID einer existierenden Category                                       |
-| description   | String (Multiline allowed)                                              |
-| position      | String                                                                  |
-| primary_image | UUID eines Item_Images, dessen item feld auf dieses item zeigt          |
+| Feld          | Typ                                                                                       |
+|---------------|-------------------------------------------------------------------------------------------|
+| name          | string (not blank, min 3. chars)                                                          |
+| parent        | UUID eines existierenden Containers. Keine Self oder Circular Reference                   |
+| category      | UUID einer existierenden Category                                                         |
+| description   | String (Multiline allowed)                                                                |
+| position      | String                                                                                    |
+| primary_image | UUID eines Item_Images, dessen item feld auf dieses item zeigt                            |
+| type          | string. Clients könnten hier ROOM, SHELF oder BOX speichern. Kein Server Side enforcement |
 
 ### CONTAINER_DELETE
 
@@ -269,7 +282,7 @@ head ist erforderlich. Wenn nicht gesetzt, null oder dandling reference wird 400
 Wenn head nicht dem tatsächlichen Head entspricht, wird 409 zurückgegeben → Der Client muss vorher änderungen herunterlanden.
 
 Der Server wendet entweder alle Commands an oder lehnt alle ab.
-Der Server muss sicherstellen, dass 
+Der Server muss sicherstellen, dass
 - nur gültige Command Types übermittelt wurden mit gültigen Command Versions.
 - nur erlaubte Felder im Payload enthalten sind (je command_type bzw command_version)
 - die constraints auf den Feldern zum Zeitpunk des Anwendens erfüllt sind → Dafür braucht der Server einen Snapshot der Daten
@@ -309,9 +322,7 @@ Option a) ist die technisch aufwändigste Option.
 Option b) Ist technisch am einfachsten, kann aber für den User unerwartetes oder frustrierendes Verhalten sein.
 Option c) Ist technisch auch aufwändig (UI), bietet aber die beste UX
 
-==> Den User zwischen Option b) und c) wählen lassen und LOKAL die entsprechenden Commands bearbeiten (NUR ERLAUBT BEVOR SYNC)
-TODO: Bisher unter Spezifiziert. Muss eindeutiger gefasst werden
-
+==> Im MVP Option b) implementieren und später anderes Verhalten einbauen
 # Test Cases
 
 Wenn nicht anders angegeben, verwende immer alle erlaubten Felder mit gültigen Werte für die Tests.
@@ -339,21 +350,21 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 18. ITEM_CREATE mit created_at = 3000-01-01T00:00:00 → fails
 19. ITEM_CREATE mit created_at = 2000-01-01T00:00:00 → succeeds
 20. ITEM_UPDATE ohne ID → fails
-21. ITEM_UPDATE ohne name → succeeds 
-22. ITEM_CREATE → ITEM_UPDATE ohne quantity → succeeds 
-23. ITEM_CREATE → ITEM_UPDATE ohne category → succeeds 
-24. ITEM_CREATE → ITEM_UPDATE ohne description → succeeds 
-25. ITEM_CREATE → ITEM_UPDATE ohne position → succeeds 
-26. ITEM_CREATE → ITEM_UPDATE ohne primary_image → succeeds 
+21. ITEM_UPDATE ohne name → succeeds
+22. ITEM_CREATE → ITEM_UPDATE ohne quantity → succeeds
+23. ITEM_CREATE → ITEM_UPDATE ohne category → succeeds
+24. ITEM_CREATE → ITEM_UPDATE ohne description → succeeds
+25. ITEM_CREATE → ITEM_UPDATE ohne position → succeeds
+26. ITEM_CREATE → ITEM_UPDATE ohne primary_image → succeeds
 27. ITEM_CREATE → ITEM_UPDATE mit nur id (alle anderen Felder weggelassen) → succeeds, Snapshot unverändert
 28. ITEM_UPDATE mit blank name → fails
 29. ITEM_UPDATE mit name mit 2 chars → fails
 30. ITEM_UPDATE ohne container → succeeds
 31. ITEM_UPDATE mit nicht existierenden container, aber valid UUID → fails
 32. ITEM_UPDATE mit id, aber kein valid UUID → fails
-33. ITEM_UPDATE mit container, aber kein valid UUID → fails 
-34. ITEM_UPDATE mit nicht existierender category, aber valid UUID → fails 
-35. ITEM_UPDATE mit category = valid UUID einer existierenden Category → succeeds 
+33. ITEM_UPDATE mit container, aber kein valid UUID → fails
+34. ITEM_UPDATE mit nicht existierender category, aber valid UUID → fails
+35. ITEM_UPDATE mit category = valid UUID einer existierenden Category → succeeds
 36. ITEM_UPDATE mit category, aber kein valid UUID → fails
 37. ITEM_UPDATE mit quantity = 0 → fails
 38. ITEM_UPDATE mit created_at = 3000-01-01T00:00:00 → fails
@@ -376,25 +387,25 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 9. CONTAINER_CREATE mit blank name → fails
 10. CONTAINER_CREATE mit name mit 2 chars → fails
 11. CONTAINER_CREATE ohne parent → fails
-12. CONTAINER_CREATE mit nicht existierenden parent, aber valid UUID → fails 
-13. CONTAINER_CREATE mit nicht existierender category, aber valid UUID → fails 
+12. CONTAINER_CREATE mit nicht existierenden parent, aber valid UUID → fails
+13. CONTAINER_CREATE mit nicht existierender category, aber valid UUID → fails
 14. CONTAINER_CREATE mit category = valid UUID einer existierenden Category → succeeds
 15. CONTAINER_CREATE mit id, aber kein valid UUID → fails
 16. CONTAINER_CREATE mit parent, aber kein valid UUID → fails
 17. CONTAINER_CREATE mit created_at = 3000-01-01T00:00:00 → fails
 18. CONTAINER_CREATE mit created_at = 2000-01-01T00:00:00 → succeeds
 19. CONTAINER_UPDATE ohne ID → fails
-20. CONTAINER_UPDATE ohne name → succeeds 
-21. CONTAINER_CREATE → CONTAINER_UPDATE ohne category → succeeds 
-22. CONTAINER_CREATE → CONTAINER_UPDATE ohne description → succeeds 
-23. CONTAINER_CREATE → CONTAINER_UPDATE ohne position → succeeds 
+20. CONTAINER_UPDATE ohne name → succeeds
+21. CONTAINER_CREATE → CONTAINER_UPDATE ohne category → succeeds
+22. CONTAINER_CREATE → CONTAINER_UPDATE ohne description → succeeds
+23. CONTAINER_CREATE → CONTAINER_UPDATE ohne position → succeeds
 24. CONTAINER_CREATE → CONTAINER_UPDATE mit nur id → succeeds, Snapshot unverändert
 25. CONTAINER_UPDATE mit blank name → fails
 26. CONTAINER_UPDATE mit name mit 2 chars → fails
 27. CONTAINER_UPDATE ohne parent → succeeds
-28. CONTAINER_UPDATE mit nicht existierenden parent, aber valid UUID → fails 
-29. CONTAINER_UPDATE mit nicht existierender category, aber valid UUID → fails 
-30. CONTAINER_UPDATE mit category = valid UUID einer existierenden Category → succeeds 
+28. CONTAINER_UPDATE mit nicht existierenden parent, aber valid UUID → fails
+29. CONTAINER_UPDATE mit nicht existierender category, aber valid UUID → fails
+30. CONTAINER_UPDATE mit category = valid UUID einer existierenden Category → succeeds
 31. CONTAINER_UPDATE mit category, aber kein valid UUID → fails
 32. CONTAINER_UPDATE mit id, aber kein valid UUID → fails
 33. CONTAINER_UPDATE mit parent, aber kein valid UUID → fails
@@ -425,13 +436,13 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 16. CATEGORY_CREATE mit created_at = 3000-01-01T00:00:00 → fails
 17. CATEGORY_CREATE mit created_at = 2000-01-01T00:00:00 → succeeds
 18. CATEGORY_UPDATE ohne ID → fails
-19. CATEGORY_CREATE → CATEGORY_UPDATE ohne description → succeeds 
-20. CATEGORY_CREATE → CATEGORY_UPDATE ohne hue → succeeds 
-21. CATEGORY_CREATE → CATEGORY_UPDATE mit nur id → succeeds, Snapshot unverändert 
-22. CATEGORY_CREATE mit hue = 0 → succeeds 
+19. CATEGORY_CREATE → CATEGORY_UPDATE ohne description → succeeds
+20. CATEGORY_CREATE → CATEGORY_UPDATE ohne hue → succeeds
+21. CATEGORY_CREATE → CATEGORY_UPDATE mit nur id → succeeds, Snapshot unverändert
+22. CATEGORY_CREATE mit hue = 0 → succeeds
 23. CATEGORY_CREATE mit hue = 360 → succeeds
-24. CATEGORY_CREATE mit hue = 361 → fails 
-25. CATEGORY_CREATE mit hue = -1 → fails 
+24. CATEGORY_CREATE mit hue = 361 → fails
+25. CATEGORY_CREATE mit hue = -1 → fails
 26. CATEGORY_CREATE ohne hue → succeeds (bleibt optional)
 27. CATEGORY_UPDATE ohne name → succeeds
 28. CATEGORY_UPDATE mit blank name → fails
@@ -443,10 +454,10 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 34. CATEGORY_UPDATE mit id, aber kein valid UUID → fails
 35. CATEGORY_UPDATE mit created_at = 3000-01-01T00:00:00 → fails
 36. CATEGORY_UPDATE mit created_at = 2000-01-01T00:00:00 → fails
-37. CATEGORY_UPDATE mit created_at = '' → fails 
-38. CATEGORY_UPDATE mit hue = 0 → succeeds 
+37. CATEGORY_UPDATE mit created_at = '' → fails
+38. CATEGORY_UPDATE mit hue = 0 → succeeds
 39. CATEGORY_UPDATE mit hue = 360 → je nach Definition succeeds oder fails (Grenzfall klären)
-40. CATEGORY_UPDATE mit hue = 361 → fails 
+40. CATEGORY_UPDATE mit hue = 361 → fails
 41. CATEGORY_UPDATE mit hue = -1 → fails
 42. CATEGORY_DELETE ohne id → fails
 43. CATEGORY_DELETE mit ungültiger id, aber valid UUID → fails
@@ -512,16 +523,16 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 29. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → CONTAINER_UPDATE (primary_image) → CONTAINER_IMAGE_DELETE → fails
 30. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → CONTAINER_UPDATE (primary_image) → CONTAINER_UPDATE (primary_image = null) → CONTAINER_IMAGE_DELETE → succeeds
 31. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → CONTAINER_UPDATE (primary_image) → CONTAINER_UPDATE (primary_image = null) → CONTAINER_IMAGE_DELETE → CONTAINER_DELETE → succeeds
-32. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → succeeds 
-33. CATEGORY_CREATE → ITEM_CREATE (category = nicht existierende, aber valide UUID) → fails 
-34. CATEGORY_CREATE → CONTAINER_CREATE (category = nicht existierende, aber valide UUID) → fails 
-35. ITEM_CREATE → ITEM_CREATE (zweites item) → ITEM_IMAGE_CREATE (item = erstes item) → ITEM_UPDATE (zweites item, primary_image = image des ersten items) → fails 
-36. ITEM_CREATE → ITEM_UPDATE (primary_image = nicht existierende, aber valide UUID) → fails 
-37. ITEM_CREATE → ITEM_UPDATE (primary_image, aber kein valid UUID) → fails 
-38. ITEM_CREATE → ITEM_IMAGE_CREATE (item) → ITEM_IMAGE_CREATE (item, zweites Bild) → ITEM_UPDATE (primary_image = zweites Bild) → succeeds 
-39. ITEM_CREATE → ITEM_IMAGE_CREATE (item eines anderen, bereits existierenden Items) → ITEM_UPDATE (primary_image = dieses fremde Bild) → fails 
-40. CONTAINER_CREATE → CONTAINER_CREATE (zweiter container) → CONTAINER_IMAGE_CREATE (container = erster container) → CONTAINER_UPDATE (zweiter container, primary_image = image des ersten containers) → fails 
-41. CONTAINER_CREATE → CONTAINER_UPDATE (primary_image = nicht existierende, aber valide UUID) → fails 
+32. CONTAINER_CREATE → CONTAINER_IMAGE_CREATE (container) → succeeds
+33. CATEGORY_CREATE → ITEM_CREATE (category = nicht existierende, aber valide UUID) → fails
+34. CATEGORY_CREATE → CONTAINER_CREATE (category = nicht existierende, aber valide UUID) → fails
+35. ITEM_CREATE → ITEM_CREATE (zweites item) → ITEM_IMAGE_CREATE (item = erstes item) → ITEM_UPDATE (zweites item, primary_image = image des ersten items) → fails
+36. ITEM_CREATE → ITEM_UPDATE (primary_image = nicht existierende, aber valide UUID) → fails
+37. ITEM_CREATE → ITEM_UPDATE (primary_image, aber kein valid UUID) → fails
+38. ITEM_CREATE → ITEM_IMAGE_CREATE (item) → ITEM_IMAGE_CREATE (item, zweites Bild) → ITEM_UPDATE (primary_image = zweites Bild) → succeeds
+39. ITEM_CREATE → ITEM_IMAGE_CREATE (item eines anderen, bereits existierenden Items) → ITEM_UPDATE (primary_image = dieses fremde Bild) → fails
+40. CONTAINER_CREATE → CONTAINER_CREATE (zweiter container) → CONTAINER_IMAGE_CREATE (container = erster container) → CONTAINER_UPDATE (zweiter container, primary_image = image des ersten containers) → fails
+41. CONTAINER_CREATE → CONTAINER_UPDATE (primary_image = nicht existierende, aber valide UUID) → fails
 42. CONTAINER_CREATE → CONTAINER_UPDATE (primary_image, aber kein valid UUID) → fails
 
 ## Command Tests
@@ -550,6 +561,6 @@ Bei allen Tests muss sowohl die Operation selbst erfolgreich sein, als auch der 
 13. fetchCommands?since=11111111-1111-1111-1111-111111111111 -> 200
 14. fetchCommands -> 200
 15. Multi-Step
-a. head = fetchCommands.last.id
-b. applyCommands?head=head <1 valid command in payload>
-c. fetchCommands?since=11111111-1111-1111-1111-111111111111 -> nach head suchen -> child = new command id?
+    a. head = fetchCommands.last.id
+    b. applyCommands?head=head <1 valid command in payload>
+    c. fetchCommands?since=11111111-1111-1111-1111-111111111111 -> nach head suchen -> child = new command id?
