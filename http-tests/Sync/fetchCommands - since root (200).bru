@@ -1,0 +1,31 @@
+meta {
+  name: fetchCommands - since root (200)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v2/sync/fetchCommands?since={{rootId}}
+  body: none
+  auth: none
+}
+
+params:query {
+  since: {{rootId}}
+}
+
+docs {
+  `since` = root command returns everything after the root (root itself excluded).
+  On a fresh database (root == head) this is an empty list.
+}
+
+tests {
+  test("status 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("root itself is excluded", function () {
+    const list = res.getBody();
+    const ids = list.map(e => e.command.id);
+    expect(ids).to.not.include(bru.getEnvVar('rootId'));
+  });
+}

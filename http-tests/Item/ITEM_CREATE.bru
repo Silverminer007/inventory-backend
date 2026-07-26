@@ -1,0 +1,71 @@
+meta {
+  name: ITEM_CREATE
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v2/sync/applyCommands?head={{head}}
+  body: json
+  auth: none
+}
+
+params:query {
+  head: {{head}}
+}
+
+docs {
+  Item Test 1: ITEM_CREATE with all allowed fields -> succeeds.
+  Requires `head` (run "Sync/Get Head" first). Stores the created item id in
+  `itemId` and advances `head` to the new tip on success.
+}
+
+script:pre-request {
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  bru.setVar('cmdId', uuid());
+  bru.setVar('itemId', uuid());
+}
+
+body:json {
+  [
+    {
+      "parent": "{{head}}",
+      "child": null,
+      "command": {
+        "id": "{{cmdId}}",
+        "command_type": "ITEM_CREATE",
+        "command_version": 1,
+        "payload": {
+          "id": "{{itemId}}",
+          "name": "Cordless Drill",
+          "container": "{{rootId}}",
+          "quantity": 3,
+          "created_at": "2000-01-01T00:00:00",
+          "description": "18V, in the blue case",
+          "position": "top shelf"
+        }
+      }
+    }
+  ]
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar('head', res.getBody());
+  }
+}
+
+tests {
+  test("status 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("new head returned", function () {
+    expect(res.getBody()).to.equal(bru.getVar('cmdId'));
+  });
+}

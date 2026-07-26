@@ -1,0 +1,27 @@
+meta {
+  name: 2 - uploadImage
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v2/uploadImage/{{imageId}}
+  body: multipartForm
+  auth: none
+}
+
+docs {
+  Uploads the binary data for the image id created by "1 - ITEM_IMAGE_CREATE".
+  The server re-encodes to JPEG and stores it in S3. Uses the bundled sample.png.
+  Requires `imageId` to be set (run request 1 first).
+}
+
+body:multipart-form {
+  file: @file(sample.png)
+}
+
+tests {
+  test("status 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

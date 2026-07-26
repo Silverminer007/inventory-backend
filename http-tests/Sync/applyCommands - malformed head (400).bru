@@ -1,0 +1,29 @@
+meta {
+  name: applyCommands - malformed head (400)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v2/sync/applyCommands?head=21313123
+  body: json
+  auth: none
+}
+
+params:query {
+  head: 21313123
+}
+
+docs {
+  A non-UUID `head` must 400.
+}
+
+body:json {
+  []
+}
+
+tests {
+  test("status 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}

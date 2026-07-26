@@ -1,0 +1,63 @@
+meta {
+  name: ITEM_UPDATE (after create)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v2/sync/applyCommands?head={{head}}
+  body: json
+  auth: none
+}
+
+params:query {
+  head: {{head}}
+}
+
+docs {
+  Item Test 3: ITEM_CREATE -> ITEM_UPDATE -> succeeds.
+  Updates the item created by the "ITEM_CREATE" request (uses `itemId`).
+  Run "ITEM_CREATE" first so `itemId` and `head` are set.
+}
+
+script:pre-request {
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  bru.setVar('cmdId', uuid());
+}
+
+body:json {
+  [
+    {
+      "parent": "{{head}}",
+      "child": null,
+      "command": {
+        "id": "{{cmdId}}",
+        "command_type": "ITEM_UPDATE",
+        "command_version": 1,
+        "payload": {
+          "id": "{{itemId}}",
+          "name": "Cordless Drill (updated)",
+          "quantity": 5
+        }
+      }
+    }
+  ]
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar('head', res.getBody());
+  }
+}
+
+tests {
+  test("status 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

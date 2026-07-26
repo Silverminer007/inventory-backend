@@ -1,0 +1,68 @@
+meta {
+  name: applyCommands - parent mismatch (409)
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v2/sync/applyCommands?head={{head}}
+  body: json
+  auth: none
+}
+
+params:query {
+  head: {{head}}
+}
+
+docs {
+  The supplied `head` query param IS the real tip, but the first command's
+  `parent` field points somewhere else (here: the root id). The client built its
+  chain on a different base than the head it claims, which is a conflict -> 409.
+
+  Run "Get Head" (or any create scenario) first so that `head` is a real command
+  that is NOT the root, otherwise head and the parent field coincide and there is
+  no mismatch to detect.
+
+  NOTE: against the current server this returns 400, not 409. Reaching the head
+  tip check but then finding no entry whose parent == head currently falls through
+  to InvalidCommandPayloadException (400). Making this return 409 requires the
+  server to treat "first entry.parent != head" as an InvalidHeadException.
+}
+
+script:pre-request {
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  bru.setVar('cmdId', uuid());
+  bru.setVar('containerId', uuid());
+}
+
+body:json {
+  [
+    {
+      "parent": "{{rootId}}",
+      "child": null,
+      "command": {
+        "id": "{{cmdId}}",
+        "command_type": "CONTAINER_CREATE",
+        "command_version": 1,
+        "payload": {
+          "id": "{{containerId}}",
+          "name": "Parent Mismatch Container",
+          "parent": "{{rootId}}",
+          "created_at": "2000-01-01T00:00:00"
+        }
+      }
+    }
+  ]
+}
+
+tests {
+  test("status 409 (parent does not match supplied head)", function () {
+    expect(res.getStatus()).to.equal(409);
+  });
+}

@@ -1,0 +1,60 @@
+meta {
+  name: ITEM_DELETE (after create)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v2/sync/applyCommands?head={{head}}
+  body: json
+  auth: none
+}
+
+params:query {
+  head: {{head}}
+}
+
+docs {
+  Item Test 2: ITEM_CREATE -> ITEM_DELETE -> succeeds.
+  Deletes the item referenced by `itemId`. Run "ITEM_CREATE" first.
+}
+
+script:pre-request {
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  bru.setVar('cmdId', uuid());
+}
+
+body:json {
+  [
+    {
+      "parent": "{{head}}",
+      "child": null,
+      "command": {
+        "id": "{{cmdId}}",
+        "command_type": "ITEM_DELETE",
+        "command_version": 1,
+        "payload": {
+          "id": "{{itemId}}"
+        }
+      }
+    }
+  ]
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar('head', res.getBody());
+  }
+}
+
+tests {
+  test("status 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
