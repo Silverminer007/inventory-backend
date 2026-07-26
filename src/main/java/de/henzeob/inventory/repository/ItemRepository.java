@@ -1,56 +1,23 @@
 package de.henzeob.inventory.repository;
 
 import de.henzeob.inventory.model.entity.Item;
-import io.quarkus.hibernate.orm.panache.PanacheRepository;
-import io.quarkus.panache.common.Sort;
+import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
-public class ItemRepository implements PanacheRepository<Item> {
+public class ItemRepository implements PanacheRepositoryBase<Item, UUID> {
 
-    public List<Item> findByUser(String userId) {
-        return list("userId", Sort.by("name"), userId);
+    public boolean existsByContainer(UUID containerId) {
+        return count("container.id = ?1", containerId) > 0;
     }
 
-    public Optional<Item> findByIdAndUser(UUID id, String userId) {
-        return find("id = ?1 and userId = ?2", id, userId).firstResultOptional();
+    public boolean existsByCategory(UUID categoryId) {
+        return count("category.id = ?1", categoryId) > 0;
     }
 
-    public List<Item> findByTag(String tag, String userId) {
-        return getEntityManager()
-                .createQuery("""
-                            SELECT i FROM Item i
-                            JOIN i.tags t
-                            WHERE t = :tag AND i.userId = :userId
-                            ORDER BY i.name
-                        """, Item.class)
-                .setParameter("tag", tag)
-                .setParameter("userId", userId)
-                .getResultList();
-    }
-
-    @SuppressWarnings("unchecked")
-    public List<String> findDistinctTagsByUser(String userId) {
-        return getEntityManager()
-                .createNativeQuery("""
-                            SELECT DISTINCT t.tag
-                            FROM item_tags t
-                            JOIN items i ON t.item_id = i.id
-                            WHERE i.user_id = :userId
-                            ORDER BY t.tag
-                        """)
-                .setParameter("userId", userId)
-                .getResultList();
-    }
-
-    public void insert(Item item) {
-        if (item.id == null) {
-            item.id = UUID.randomUUID();
-        }
-        this.getEntityManager().persist(item);
+    public boolean existsByPrimaryImage(UUID imageId) {
+        return count("primaryImage.id = ?1", imageId) > 0;
     }
 }

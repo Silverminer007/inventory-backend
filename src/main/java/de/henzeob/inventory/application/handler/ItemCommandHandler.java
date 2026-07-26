@@ -1,242 +1,142 @@
 package de.henzeob.inventory.application.handler;
 
+import de.henzeob.inventory.application.CategoryService;
+import de.henzeob.inventory.application.ContainerService;
 import de.henzeob.inventory.application.ItemService;
-import de.henzeob.inventory.mapper.ItemMapper;
-import de.henzeob.inventory.model.dto.CategorySummaryDTO;
-import de.henzeob.inventory.model.dto.ItemDTO;
-import de.henzeob.inventory.model.entity.Command;
+import de.henzeob.inventory.exceptions.InvalidCommandPayloadException;
+import de.henzeob.inventory.model.entity.Category;
+import de.henzeob.inventory.model.entity.Container;
+import de.henzeob.inventory.model.entity.Image;
 import de.henzeob.inventory.model.entity.Item;
 import de.henzeob.inventory.model.enums.CommandType;
-import de.henzeob.inventory.repository.CommandRepository;
-import de.henzeob.inventory.repository.ItemRepository;
+import de.henzeob.inventory.repository.ImageRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import static de.henzeob.inventory.application.handler.CommandPayloadUtils.required;
-import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toInteger;
-import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toLong;
-import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toUUID;
+import static de.henzeob.inventory.application.handler.PayloadValidator.optionalName;
+import static de.henzeob.inventory.application.handler.PayloadValidator.optionalQuantity;
+import static de.henzeob.inventory.application.handler.PayloadValidator.optionalString;
+import static de.henzeob.inventory.application.handler.PayloadValidator.optionalUUID;
+import static de.henzeob.inventory.application.handler.PayloadValidator.requireCreatedAtBeforeNow;
+import static de.henzeob.inventory.application.handler.PayloadValidator.requireName;
+import static de.henzeob.inventory.application.handler.PayloadValidator.requireOnlyKeys;
+import static de.henzeob.inventory.application.handler.PayloadValidator.requireQuantity;
+import static de.henzeob.inventory.application.handler.PayloadValidator.requireUUID;
 
 @ApplicationScoped
 public class ItemCommandHandler {
+
+    private static final Set<String> CREATE_REQUIRED = Set.of("id", "name", "container", "quantity", "created_at");
+    private static final Set<String> CREATE_OPTIONAL = Set.of("description", "position", "category");
+    private static final Set<String> UPDATE_REQUIRED = Set.of("id");
+    private static final Set<String> UPDATE_OPTIONAL =
+            Set.of("name", "container", "category", "quantity", "description", "position", "primary_image");
+    private static final Set<String> DELETE_REQUIRED = Set.of("id");
+    private static final Set<String> DELETE_OPTIONAL = Set.of();
 
     @Inject
     ItemService itemService;
 
     @Inject
-    ItemRepository itemRepository;
+    ContainerService containerService;
 
     @Inject
-    ItemMapper itemMapper;
+    CategoryService categoryService;
 
     @Inject
-    CommandRepository commandRepository;
+    ImageRepository imageRepository;
 
-    public Object handle(CommandType type, Command command, String userId) {
-        Map<String, Object> p = command.payload;
-        return switch (type) {
-            case ITEM_CREATE -> handleCreate(p, userId);
-            case ITEM_UPDATE -> handleUpdate(command.entityId, p, userId);
-            case ITEM_DELETE -> handleDelete(command.entityId, userId, p);
-            case ITEM_MOVE   -> handleMove(command.entityId, p, userId);
+    @Inject
+    Clock clock;
+
+    public void handle(CommandType type, Map<String, Object> payload) {
+        switch (type) {
+            case ITEM_CREATE -> handleCreate(payload);
+            case ITEM_UPDATE -> handleUpdate(payload);
+            case ITEM_DELETE -> handleDelete(payload);
             default -> throw new IllegalArgumentException("Not an ITEM command: " + type);
-        };
+        }
     }
 
-    private ItemDTO handleCreate(Map<String, Object> p, String userId) {
-        ItemDTO dto = new ItemDTO();
-        dto.id = toUUID(p.get("id")); // optional client-provided UUID
-        dto.name = required(p, "name");
-        dto.description = (String) p.get("description");
-        dto.containerId = toUUID(p.get("containerId"));
-        dto.position = (String) p.get("position");
-        dto.quantity = p.get("quantity") != null ? toInteger(p.get("quantity")) : 1;
-        dto.barcode = (String) p.get("barcode");
-        if (p.get("tags") instanceof List<?> rawTags) {
-            Set<String> tags = new LinkedHashSet<>();
-            for (Object t : rawTags) tags.add(t.toString());
-            dto.tags = tags;
-        }
-        if (p.get("category") instanceof Map<?, ?> catMap) {
-            dto.category = new CategorySummaryDTO();
-            dto.category.id = toUUID(catMap.get("id"));
-        }
-        return itemService.createItem(dto, userId);
+    private void handleCreate(Map<String, Object> p) {
+        requireOnlyKeys(p, CREATE_REQUIRED, CREATE_OPTIONAL);
+
+        UUID id = requireUUID(p, "id");
+        String name = requireName(p, "name");
+        UUID containerId = requireUUID(p, "container");
+        int quantity = requireQuantity(p, "quantity");
+        LocalDateTime createdAt = requireCreatedAtBeforeNow(p, "created_at", clock);
+        String description = optionalString(p, "description");
+        String position = optionalString(p, "position");
+        UUID categoryId = optionalUUID(p, "category");
+
+        Container container = containerService.getExisting(containerId);
+        Category category = categoryId != null ? categoryService.getExisting(categoryId) : null;
+
+        Item item = itemService.create(id, name, description, container, position, quantity, createdAt);
+        item.category = category;
     }
 
-    private Object handleUpdate(UUID entityId, Map<String, Object> p, String userId) {
-        Long clientVersion = toLong(p.get("version"));
-        boolean force = Boolean.TRUE.equals(p.get("force"));
+    private void handleUpdate(Map<String, Object> p) {
+        requireOnlyKeys(p, UPDATE_REQUIRED, UPDATE_OPTIONAL);
 
-        Item item = itemRepository.findByIdAndUser(entityId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Item not found: " + entityId));
+        UUID id = requireUUID(p, "id");
+        Item item = itemService.getExisting(id);
 
-        if (force || clientVersion == null || item.version.equals(clientVersion)) {
-            return applyUpdate(entityId, p, userId);
+        String name = optionalName(p, "name");
+        if (name != null) {
+            item.name = name;
         }
-
-        long versionGap = item.version - clientVersion;
-        Set<String> serverChanged = serverChangedItemFields(entityId, versionGap);
-
-        List<String> conflictingFields = new ArrayList<>();
-
-        if (p.containsKey("name") && !Objects.equals(p.get("name"), item.name)
-                && serverChanged.contains("name")) {
-            conflictingFields.add("name");
+        if (p.containsKey("description")) {
+            item.description = optionalString(p, "description");
         }
-        if (p.containsKey("description") && !Objects.equals(p.get("description"), item.description)
-                && serverChanged.contains("description")) {
-            conflictingFields.add("description");
+        if (p.containsKey("position")) {
+            item.position = optionalString(p, "position");
         }
-        if (p.containsKey("position") && !Objects.equals(p.get("position"), item.position)
-                && serverChanged.contains("position")) {
-            conflictingFields.add("position");
+        Integer quantity = optionalQuantity(p, "quantity");
+        if (quantity != null) {
+            item.quantity = quantity;
         }
-        if (p.containsKey("quantity") && p.get("quantity") != null) {
-            Integer clientQty = toInteger(p.get("quantity"));
-            if (!Objects.equals(clientQty, item.quantity) && serverChanged.contains("quantity")) {
-                conflictingFields.add("quantity");
-            }
+        if (p.containsKey("container")) {
+            UUID containerId = requireUUID(p, "container");
+            item.container = containerService.getExisting(containerId);
         }
-        if (p.containsKey("barcode") && !Objects.equals(p.get("barcode"), item.barcode)
-                && serverChanged.contains("barcode")) {
-            conflictingFields.add("barcode");
+        if (p.containsKey("category")) {
+            UUID categoryId = optionalUUID(p, "category");
+            item.category = categoryId != null ? categoryService.getExisting(categoryId) : null;
         }
-        if (p.containsKey("tags")) {
-            Set<String> clientTags = extractTags(p);
-            Set<String> serverTags = itemMapper.toDTO(item).tags;
-            if (!Objects.equals(clientTags, serverTags)) {
-                conflictingFields.add("tags");
-            }
+        if (p.containsKey("primary_image")) {
+            item.primaryImage = resolvePrimaryImage(p.get("primary_image"), item);
         }
-        if (p.containsKey("category") && p.get("category") instanceof Map<?, ?> catMap) {
-            UUID clientCategoryId = toUUID(catMap.get("id"));
-            UUID serverCategoryId = item.category != null ? item.category.id : null;
-            if (!Objects.equals(clientCategoryId, serverCategoryId) && serverChanged.contains("category")) {
-                conflictingFields.add("category");
-            }
-        }
-
-        if (!conflictingFields.isEmpty()) {
-            ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
-            info.clientVersion = clientVersion;
-            info.serverVersion = item.version;
-            info.conflictingFields = conflictingFields;
-            info.serverSnapshot = itemMapper.toDTO(item);
-            info.clientPayload = p;
-            return new ConflictResult.Conflicted(info);
-        }
-
-        // Auto-merge
-        ItemDTO overlayDto = itemMapper.toDTO(item);
-        if (p.containsKey("name"))        overlayDto.name = (String) p.get("name");
-        if (p.containsKey("description")) overlayDto.description = (String) p.get("description");
-        if (p.containsKey("position"))    overlayDto.position = (String) p.get("position");
-        if (p.containsKey("quantity"))    overlayDto.quantity = p.get("quantity") != null ? toInteger(p.get("quantity")) : null;
-        if (p.containsKey("barcode"))     overlayDto.barcode = (String) p.get("barcode");
-        if (p.containsKey("tags"))        overlayDto.tags = extractTags(p);
-        if (p.containsKey("category") && p.get("category") instanceof Map<?, ?> catMap) {
-            overlayDto.category = new CategorySummaryDTO();
-            overlayDto.category.id = toUUID(catMap.get("id"));
-        }
-        return itemService.updateItem(entityId, overlayDto, userId);
     }
 
-    private Set<String> serverChangedItemFields(UUID entityId, long versionGap) {
-        if (versionGap <= 0) return Set.of();
-        List<Command> recent = commandRepository.findRecentApplied(
-                entityId, "ITEM", (int) Math.min(versionGap, 100));
-        Set<String> meta = Set.of("version", "force", "containerId");
-        Set<String> changed = new HashSet<>();
-        for (Command cmd : recent) {
-            if (cmd.commandType == CommandType.ITEM_UPDATE && cmd.payload != null) {
-                for (String key : cmd.payload.keySet()) {
-                    if (!meta.contains(key)) changed.add(key);
-                }
-            }
+    private Image resolvePrimaryImage(Object rawValue, Item item) {
+        if (rawValue == null) {
+            return null;
         }
-        return changed;
+        UUID imageId;
+        try {
+            imageId = UUID.fromString(rawValue.toString());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidCommandPayloadException();
+        }
+        Image image = imageRepository.findByIdOptional(imageId)
+                .orElseThrow(InvalidCommandPayloadException::new);
+        if (image.item == null || !image.item.id.equals(item.id)) {
+            throw new InvalidCommandPayloadException();
+        }
+        return image;
     }
 
-    private ItemDTO applyUpdate(UUID entityId, Map<String, Object> p, String userId) {
-        ItemDTO dto = new ItemDTO();
-        dto.id = entityId;
-        dto.name = (String) p.get("name");
-        dto.description = (String) p.get("description");
-        dto.position = (String) p.get("position");
-        dto.quantity = p.get("quantity") != null ? toInteger(p.get("quantity")) : null;
-        dto.barcode = (String) p.get("barcode");
-        dto.version = toLong(p.get("version"));
-        Set<String> tags = new LinkedHashSet<>();
-        if (p.get("tags") instanceof List<?> rawTags) {
-            for (Object t : rawTags) tags.add(t.toString());
-        }
-        dto.tags = tags;
-        if (p.get("category") instanceof Map<?, ?> catMap) {
-            dto.category = new CategorySummaryDTO();
-            dto.category.id = toUUID(catMap.get("id"));
-        }
-        return itemService.updateItem(entityId, dto, userId);
-    }
-
-    private Object handleDelete(UUID entityId, String userId, Map<String, Object> p) {
-        Long clientVersion = toLong(p.get("version"));
-        boolean force = Boolean.TRUE.equals(p.get("force"));
-
-        if (!force && clientVersion != null) {
-            Item item = itemRepository.findByIdAndUser(entityId, userId)
-                    .orElseThrow(() -> new IllegalArgumentException("Item not found: " + entityId));
-            if (item.version > clientVersion) {
-                ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
-                info.clientVersion = clientVersion;
-                info.serverVersion = item.version;
-                info.conflictingFields = List.of();
-                info.serverSnapshot = itemMapper.toDTO(item);
-                info.clientPayload = p;
-                return new ConflictResult.Conflicted(info);
-            }
-        }
-
-        itemService.deleteItem(entityId, userId);
-        return null;
-    }
-
-    private Object handleMove(UUID entityId, Map<String, Object> p, String userId) {
-        Long clientVersion = toLong(p.get("version"));
-        boolean force = Boolean.TRUE.equals(p.get("force"));
-
-        if (!force && clientVersion != null) {
-            Item item = itemRepository.findByIdAndUser(entityId, userId)
-                    .orElseThrow(() -> new IllegalArgumentException("Item not found: " + entityId));
-            if (item.version > clientVersion) {
-                ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
-                info.clientVersion = clientVersion;
-                info.serverVersion = item.version;
-                info.conflictingFields = List.of();
-                info.serverSnapshot = itemMapper.toDTO(item);
-                info.clientPayload = p;
-                return new ConflictResult.Conflicted(info);
-            }
-        }
-
-        UUID containerId = toUUID(required(p, "containerId"));
-        return itemService.moveItem(entityId, userId, containerId);
-    }
-
-    private Set<String> extractTags(Map<String, Object> p) {
-        Set<String> tags = new LinkedHashSet<>();
-        if (p.get("tags") instanceof List<?> rawTags) {
-            for (Object t : rawTags) tags.add(t.toString());
-        }
-        return tags;
+    private void handleDelete(Map<String, Object> p) {
+        requireOnlyKeys(p, DELETE_REQUIRED, DELETE_OPTIONAL);
+        UUID id = requireUUID(p, "id");
+        itemService.delete(id);
     }
 }
