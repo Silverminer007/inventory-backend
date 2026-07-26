@@ -6,6 +6,8 @@ services:
       POSTGRES_DB: inventory
       POSTGRES_USER: inventory
       POSTGRES_PASSWORD: inventory
+      # postgres:18 rejects a volume mounted at the data-dir root; keep data in a subdir
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     volumes:
