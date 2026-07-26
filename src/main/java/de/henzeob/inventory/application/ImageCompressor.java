@@ -43,7 +43,9 @@ public class ImageCompressor {
             return best;
         }
 
-        for (float quality = 0.8f; quality >= MIN_QUALITY; quality -= 0.1f) {
+        int minStep = Math.round(MIN_QUALITY * 10f);
+        for (int step = 8; step >= minStep; step--) {
+            float quality = step / 10f;
             byte[] attempt = encodeJpeg(current, quality);
             if (attempt.length <= TARGET_BYTES) {
                 return attempt;

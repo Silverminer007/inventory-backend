@@ -75,9 +75,12 @@ public class CommandService {
     }
 
     private CommandType parseCommandType(String value) {
+        if (value == null) {
+            throw new InvalidCommandPayloadException();
+        }
         try {
             return CommandType.valueOf(value);
-        } catch (IllegalArgumentException | NullPointerException e) {
+        } catch (IllegalArgumentException e) {
             throw new InvalidCommandPayloadException();
         }
     }

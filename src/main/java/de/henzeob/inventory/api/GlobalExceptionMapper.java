@@ -36,9 +36,6 @@ public class GlobalExceptionMapper implements ExceptionMapper<Exception> {
                 || exception instanceof InvalidCommandPayloadException
                 || exception instanceof IllegalArgumentException) {
             status = Response.Status.BAD_REQUEST;
-        } else if (exception instanceof IllegalStateException) {
-            status = Response.Status.INTERNAL_SERVER_ERROR;
-            errorResponse.put("message", "Ein Fehler ist aufgetreten");
         } else {
             status = Response.Status.INTERNAL_SERVER_ERROR;
             errorResponse.put("message", "Ein Fehler ist aufgetreten");
