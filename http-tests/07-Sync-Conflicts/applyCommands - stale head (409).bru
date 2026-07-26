@@ -1,7 +1,7 @@
 meta {
   name: applyCommands - stale head (409)
   type: http
-  seq: 8
+  seq: 1
 }
 
 post {
@@ -15,10 +15,10 @@ params:query {
 }
 
 docs {
-  Applying against a head that is no longer the tip must 409.
-  This uses the root command id as `head`; it only produces a 409 once at least
-  one command has been appended past root (e.g. after running any Item/Container
-  create scenario). On a truly fresh DB where root == head this succeeds instead.
+  Applying against a head that is no longer the tip must 409. This uses the root
+  command id as `head`; root has a child as soon as any command has been appended.
+  In a full `bru run` the earlier create folders guarantee that, so this 409s.
+  (Run in isolation against a truly fresh DB where root == head it would succeed.)
 }
 
 script:pre-request {

@@ -1,0 +1,64 @@
+meta {
+  name: 5 - ITEM_IMAGE_CREATE
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v2/sync/applyCommands?head={{head}}
+  body: json
+  auth: none
+}
+
+params:query {
+  head: {{head}}
+}
+
+docs {
+  Item Image Test 1: ITEM_IMAGE_CREATE for an existing item -> succeeds.
+  Uses the `itemId` created by request 1 in this folder. Stores the new image id
+  in `imageId`, which the Upload/Download requests then use.
+}
+
+script:pre-request {
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  bru.setVar('cmdId', uuid());
+  bru.setVar('imageId', uuid());
+}
+
+body:json {
+  [
+    {
+      "parent": "{{head}}",
+      "child": null,
+      "command": {
+        "id": "{{cmdId}}",
+        "command_type": "ITEM_IMAGE_CREATE",
+        "command_version": 1,
+        "payload": {
+          "id": "{{imageId}}",
+          "item": "{{itemId}}",
+          "created_at": "2000-01-01T00:00:00"
+        }
+      }
+    }
+  ]
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar('head', res.getBody());
+  }
+}
+
+tests {
+  test("status 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

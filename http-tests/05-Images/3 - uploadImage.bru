@@ -1,7 +1,7 @@
 meta {
-  name: 2 - uploadImage
+  name: 3 - uploadImage
   type: http
-  seq: 2
+  seq: 3
 }
 
 post {
@@ -11,7 +11,7 @@ post {
 }
 
 docs {
-  Uploads the binary data for the image id created by "1 - ITEM_IMAGE_CREATE".
+  Uploads the binary data for the image id created by "2 - ITEM_IMAGE_CREATE".
   The server re-encodes to JPEG and stores it in S3. Uses the bundled sample.png.
   Requires `imageId` to be set (run request 1 first).
 }

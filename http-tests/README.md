@@ -40,17 +40,23 @@ Runtime vars set along the way and reused by later requests: `head`, `itemId`,
 
 ## Layout
 
-- **Sync/** — `Initial empty database` (a precondition guard asserting the chain
-  holds only the seeded ROOT command — run it first, against a fresh DB), head
-  handling, and `fetch`/`apply` edge cases (400/404/409, including a
-  parent-vs-head mismatch conflict).
-- **Item/**, **Container/**, **Category/** — happy-path create/update/delete plus a
-  couple of validation failures.
-- **Images/** — `ITEM_IMAGE_CREATE` command → `uploadImage` (multipart, uses the
-  bundled `sample.png`) → `downloadImage`. Run in order 1 → 2 → 3, after an
-  `Item/ITEM_CREATE`.
-- **Mixed/** — a multi-command chain applied atomically in one request, and a
-  command-envelope validation failure.
+Because the whole collection shares one global, append-only chain, a full
+`bru run` is one linear scenario and folder order matters. The Bruno CLI walks
+folders alphabetically, so folders are numbered to force a meaningful order:
+
+- **01-Sync/** — `Initial empty database` (precondition guard: the chain holds only
+  the seeded ROOT command — must run first, against a fresh DB), `Get Head`, and
+  `fetch`/`apply` edge cases (400/404). None of these mutate, so the DB is still
+  empty when they finish.
+- **02-Container/**, **03-Category/** — happy-path creates that move the head past root.
+- **04-Item/** — create → update → delete, plus validation failures. This folder
+  deletes its own item, which is why Images creates a fresh one.
+- **05-Images/** — self-contained: `ITEM_CREATE` → `ITEM_IMAGE_CREATE` → `uploadImage`
+  (multipart, bundled `sample.png`) → `downloadImage`, run 1 → 2 → 3 → 4.
+- **06-Mixed/** — a multi-command chain applied atomically, and a command-envelope
+  validation failure.
+- **07-Sync-Conflicts/** — the two 409 conflict cases (stale head, parent-vs-head
+  mismatch). These need the chain to already be past root, so they run last.
 
 Scenario names reference the numbered "Test Cases" sections in `../DOMAIN-RULES.md`.
 

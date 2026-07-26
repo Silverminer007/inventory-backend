@@ -1,7 +1,7 @@
 meta {
   name: applyCommands - parent mismatch (409)
   type: http
-  seq: 9
+  seq: 2
 }
 
 post {
@@ -19,14 +19,10 @@ docs {
   `parent` field points somewhere else (here: the root id). The client built its
   chain on a different base than the head it claims, which is a conflict -> 409.
 
-  Run "Get Head" (or any create scenario) first so that `head` is a real command
-  that is NOT the root, otherwise head and the parent field coincide and there is
-  no mismatch to detect.
-
-  NOTE: against the current server this returns 400, not 409. Reaching the head
-  tip check but then finding no entry whose parent == head currently falls through
-  to InvalidCommandPayloadException (400). Making this return 409 requires the
-  server to treat "first entry.parent != head" as an InvalidHeadException.
+  Requires `head` to be a real command that is NOT the root, otherwise head and the
+  parent field coincide and there is no mismatch. In a full `bru run` the earlier
+  create folders advance the head, so this holds. SyncService treats "no batch
+  entry attaches to the supplied head" as an InvalidHeadException (409).
 }
 
 script:pre-request {
