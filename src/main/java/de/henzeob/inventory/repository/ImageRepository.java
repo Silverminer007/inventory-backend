@@ -1,34 +1,19 @@
 package de.henzeob.inventory.repository;
 
 import de.henzeob.inventory.model.entity.Image;
-import io.quarkus.hibernate.orm.panache.PanacheRepository;
-import io.quarkus.panache.common.Sort;
+import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
-public class ImageRepository implements PanacheRepository<Image> {
+public class ImageRepository implements PanacheRepositoryBase<Image, UUID> {
 
-    public List<Image> findByItemAndUser(UUID itemId, String userId) {
-        return list("item.id = ?1 and userId = ?2", Sort.by("uploadedAt"), itemId, userId);
+    public boolean existsByItem(UUID itemId) {
+        return count("item.id = ?1", itemId) > 0;
     }
 
-    public List<Image> findByContainerAndUser(UUID containerId, String userId) {
-        return list("container.id = ?1 and userId = ?2", Sort.by("uploadedAt"), containerId, userId);
-    }
-
-    public Optional<Image> findByIdAndUser(UUID id, String userId) {
-        return find("id = ?1 and userId = ?2", id, userId).firstResultOptional();
-    }
-
-    public long countByItemAndUser(UUID itemId, String userId) {
-        return count("item.id = ?1 and userId = ?2", itemId, userId);
-    }
-
-    public long countByContainerAndUser(UUID containerId, String userId) {
-        return count("container.id = ?1 and userId = ?2", containerId, userId);
+    public boolean existsByContainer(UUID containerId) {
+        return count("container.id = ?1", containerId) > 0;
     }
 }

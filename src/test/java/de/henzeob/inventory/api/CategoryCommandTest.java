@@ -1,615 +1,418 @@
 package de.henzeob.inventory.api;
 
+import de.henzeob.inventory.model.entity.Category;
+import de.henzeob.inventory.repository.CategoryRepository;
 import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.response.ValidatableResponse;
-import org.junit.jupiter.api.BeforeEach;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.UUID;
 
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.Matchers.contains;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThan;
+import static de.henzeob.inventory.support.SyncTestSupport.FUTURE;
+import static de.henzeob.inventory.support.SyncTestSupport.PAST;
+import static de.henzeob.inventory.support.SyncTestSupport.applyExpectStatus;
+import static de.henzeob.inventory.support.SyncTestSupport.applyOk;
+import static de.henzeob.inventory.support.SyncTestSupport.currentHead;
+import static de.henzeob.inventory.support.SyncTestSupport.payload;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** "Category Tests" section of DOMAIN-RULES.md. */
 @QuarkusTest
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CategoryCommandTest {
 
-    private String defaultCategoryId;
-    private String roomId;
-
-    @BeforeEach
-    void setup() {
-        if (defaultCategoryId != null) return;
-
-        defaultCategoryId = given().get("/api/v1/categories/by-short-code/XX")
-                .then().statusCode(200)
-                .extract().jsonPath().getString("id");
-
-        roomId = postCommand("""
-            [{"commandId":"%s","commandType":"CONTAINER_CREATE",
-              "payload":{"name":"Category Test Room","containerType":"ROOM"}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getString("[0].entityId");
-    }
-
-    // ─── Helpers ─────────────────────────────────────────────────────────────
-
-    private ValidatableResponse postCommand(String json) {
-        return given()
-                .contentType("application/json")
-                .body(json)
-                .when().post("/api/v1/commands")
-                .then()
-                .statusCode(200);
-    }
-
-    private String createCategory(String name, String shortCode) {
-        return postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"name":"%s","shortCode":"%s"}}]
-            """.formatted(UUID.randomUUID(), name, shortCode))
-                .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getString("[0].entityId");
-    }
-
-    private long categoryVersion(String id) {
-        return given().get("/api/v1/categories/" + id)
-                .then().statusCode(200)
-                .extract().jsonPath().getLong("version");
-    }
-
-    private long advanceCategoryVersion(String id, String newName) {
-        long ver = categoryVersion(id);
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"%s","version":%d}}]
-            """.formatted(UUID.randomUUID(), id, newName, ver))
-                .body("[0].status", is("APPLIED"));
-        return categoryVersion(id);
-    }
-
-    private void advanceCategoryHue(String id, int newHue) {
-        long ver = categoryVersion(id);
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"hue":%d,"version":%d}}]
-            """.formatted(UUID.randomUUID(), id, newHue, ver))
-                .body("[0].status", is("APPLIED"));
-    }
-
-    private int computeExpectedHue(List<Integer> hues) {
-        if (hues.isEmpty()) return 0;
-        List<Integer> sorted = new ArrayList<>(hues);
-        Collections.sort(sorted);
-        int n = sorted.size();
-        int bestMid = 0;
-        int bestGap = 0;
-        for (int i = 0; i < n; i++) {
-            int a = sorted.get(i);
-            int b = sorted.get((i + 1) % n);
-            int gap = (b - a + 360) % 360;
-            if (gap > bestGap) {
-                bestGap = gap;
-                bestMid = (a + gap / 2) % 360;
-            }
-        }
-        return bestMid;
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // CATEGORY_CREATE
-    // ═══════════════════════════════════════════════════════════════════════
+    @Inject
+    CategoryRepository categoryRepository;
 
     @Test
-    void categoryCreate_applied() {
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"name":"Electronics","shortCode":"EL1"}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].entityId", notNullValue())
-                .body("[0].snapshot.name", is("Electronics"))
-                .body("[0].snapshot.shortCode", is("EL1"))
-                .body("[0].snapshot.version", notNullValue())
-                .body("[0].conflictInfo", nullValue());
+    public void create_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "Electronics", "shortcode", "ELEC",
+                        "description", "Gadgets", "hue", 120, "created_at", PAST));
+
+        Category category = categoryRepository.findByIdOptional(id).orElseThrow();
+        assertEquals("Electronics", category.name);
+        assertEquals("ELEC", category.shortCode);
+        assertEquals("Gadgets", category.description);
+        assertEquals(120, category.hue);
     }
 
     @Test
-    void categoryCreate_missingName_failed() {
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"shortCode":"NO_NAME"}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("FAILED"));
+    public void create_thenDelete_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Temp Cat", "shortcode", "TMP1", "created_at", PAST));
+        applyOk(head, "CATEGORY_DELETE", payload("id", id.toString()));
+
+        assertTrue(categoryRepository.findByIdOptional(id).isEmpty());
     }
 
     @Test
-    void categoryCreate_missingShortCode_failed() {
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"name":"No ShortCode Category"}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("FAILED"));
+    public void create_thenUpdate_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Books", "shortcode", "BOOK", "created_at", PAST));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "Books & Media"));
+
+        Category category = categoryRepository.findByIdOptional(id).orElseThrow();
+        assertEquals("Books & Media", category.name);
     }
 
     @Test
-    void categoryCreate_duplicateShortCode_failed() {
-        // shortCode "XX" already exists from migration seed
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"name":"Duplicate","shortCode":"XX"}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("FAILED"));
-    }
+    public void create_update_delete_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Toys", "shortcode", "TOYS", "created_at", PAST));
+        head = applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "Toys & Games"));
+        applyOk(head, "CATEGORY_DELETE", payload("id", id.toString()));
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // CATEGORY_UPDATE
-    // ═══════════════════════════════════════════════════════════════════════
-
-    @Test
-    void categoryUpdate_matchingVersion_applied() {
-        String id = createCategory("Update Target", "UT1");
-        long ver = categoryVersion(id);
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Update Target Modified","version":%d}}]
-            """.formatted(UUID.randomUUID(), id, ver))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.name", is("Update Target Modified"))
-                .body("[0].conflictInfo", nullValue());
+        assertTrue(categoryRepository.findByIdOptional(id).isEmpty());
     }
 
     @Test
-    void categoryUpdate_noVersion_applied_legacyBehavior() {
-        String id = createCategory("Legacy Update", "LU1");
-        advanceCategoryVersion(id, "Legacy Update v2");
+    public void updateName_thenUpdateNameAgain_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "First", "shortcode", "FRST", "created_at", PAST));
+        head = applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "Second"));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "Third"));
 
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Legacy Update Final"}}]
-            """.formatted(UUID.randomUUID(), id))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].conflictInfo", nullValue());
+        assertEquals("Third", categoryRepository.findByIdOptional(id).orElseThrow().name);
     }
 
     @Test
-    void categoryUpdate_staleVersion_conflictingName_conflict() {
-        String id = createCategory("Conflict Cat", "CCF1");
-        long staleVer = categoryVersion(id);
-        advanceCategoryVersion(id, "Conflict Cat Updated");
+    public void updateName_thenUpdateDescription_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "First", "shortcode", "SHRT", "created_at", PAST));
+        head = applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "Renamed"));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "description", "New description"));
 
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Conflict Cat Old","version":%d}}]
-            """.formatted(UUID.randomUUID(), id, staleVer))
-                .body("[0].status", is("CONFLICT"))
-                .body("[0].conflictInfo.conflictingFields", contains("name"))
-                .body("[0].conflictInfo.serverSnapshot.name", is("Conflict Cat Updated"))
-                .body("[0].conflictInfo.clientPayload.name", is("Conflict Cat Old"));
+        Category category = categoryRepository.findByIdOptional(id).orElseThrow();
+        assertEquals("Renamed", category.name);
+        assertEquals("New description", category.description);
     }
 
     @Test
-    void categoryUpdate_staleVersion_autoMerge_applied() {
-        String id = createCategory("Merge Cat", "MCG1");
-        long staleVer = categoryVersion(id);
-        advanceCategoryVersion(id, "Merge Cat v2");
-
-        // Client sends the server's current name — no real conflict
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Merge Cat v2","version":%d}}]
-            """.formatted(UUID.randomUUID(), id, staleVer))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].conflictInfo", nullValue());
+    public void create_withoutId_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("name", "No Id", "shortcode", "NOID", "created_at", PAST), 400);
     }
 
     @Test
-    void categoryUpdate_staleVersion_force_applied() {
-        String id = createCategory("Force Cat", "FC1");
-        long staleVer = categoryVersion(id);
-        advanceCategoryVersion(id, "Force Cat v2");
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Force Cat Override","version":%d,"force":true}}]
-            """.formatted(UUID.randomUUID(), id, staleVer))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].conflictInfo", nullValue());
+    public void create_withoutName_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", UUID.randomUUID().toString(), "shortcode", "NONM", "created_at", PAST), 400);
     }
 
     @Test
-    void categoryUpdate_duplicateShortCode_failed() {
-        createCategory("Short Code Owner", "SCO1");
-        String id = createCategory("Short Code Changer", "SCC1");
-        long ver = categoryVersion(id);
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"shortCode":"SCO1","version":%d}}]
-            """.formatted(UUID.randomUUID(), id, ver))
-                .body("[0].status", is("FAILED"));
+    public void create_withBlankName_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", UUID.randomUUID().toString(), "name", "   ", "shortcode", "BLNK", "created_at", PAST), 400);
     }
 
     @Test
-    void categoryUpdate_sameShortCode_applied() {
-        // Updating to the entity's own current shortCode must not be rejected
-        String id = createCategory("Own ShortCode", "OSC1");
-        long ver = categoryVersion(id);
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"shortCode":"OSC1","version":%d}}]
-            """.formatted(UUID.randomUUID(), id, ver))
-                .body("[0].status", is("APPLIED"));
+    public void create_withNameTwoChars_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", UUID.randomUUID().toString(), "name", "Ab", "shortcode", "SHRT", "created_at", PAST), 400);
     }
 
     @Test
-    void categoryUpdate_nonExistent_failed() {
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"00000000-0000-0000-0000-000000000000",
-              "payload":{"name":"Ghost"}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("FAILED"));
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // CATEGORY_DELETE
-    // ═══════════════════════════════════════════════════════════════════════
-
-    @Test
-    void categoryDelete_matchingVersion_applied() {
-        String id = createCategory("Delete Me", "DM1");
-        long ver = categoryVersion(id);
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_DELETE",
-              "entityId":"%s",
-              "payload":{"version":%d}}]
-            """.formatted(UUID.randomUUID(), id, ver))
-                .body("[0].status", is("APPLIED"));
+    public void create_withoutShortcode_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", UUID.randomUUID().toString(), "name", "No Shortcode", "created_at", PAST), 400);
     }
 
     @Test
-    void categoryDelete_noVersion_applied_legacyBehavior() {
-        String id = createCategory("Delete Legacy", "DL1");
-        advanceCategoryVersion(id, "Delete Legacy v2");
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_DELETE",
-              "entityId":"%s",
-              "payload":{}}]
-            """.formatted(UUID.randomUUID(), id))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].conflictInfo", nullValue());
+    public void create_withBlankShortcode_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", UUID.randomUUID().toString(), "name", "Blank Shortcode", "shortcode", "   ", "created_at", PAST), 400);
     }
 
     @Test
-    void categoryDelete_staleVersion_conflict() {
-        String id = createCategory("Delete Stale", "DS1");
-        long staleVer = categoryVersion(id);
-        long serverVer = advanceCategoryVersion(id, "Delete Stale v2");
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_DELETE",
-              "entityId":"%s",
-              "payload":{"version":%d}}]
-            """.formatted(UUID.randomUUID(), id, staleVer))
-                .body("[0].status", is("CONFLICT"))
-                .body("[0].conflictInfo.clientVersion", is((int) staleVer))
-                .body("[0].conflictInfo.serverVersion", is((int) serverVer))
-                .body("[0].conflictInfo.conflictingFields", empty())
-                .body("[0].conflictInfo.serverSnapshot", notNullValue());
+    public void create_withShortcodeTwoChars_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "Two Char Code", "shortcode", "AB", "created_at", PAST));
+        assertEquals("AB", categoryRepository.findByIdOptional(id).orElseThrow().shortCode);
     }
 
     @Test
-    void categoryDelete_staleVersion_force_applied() {
-        String id = createCategory("Delete Force", "DF1");
-        long staleVer = categoryVersion(id);
-        advanceCategoryVersion(id, "Delete Force v2");
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_DELETE",
-              "entityId":"%s",
-              "payload":{"version":%d,"force":true}}]
-            """.formatted(UUID.randomUUID(), id, staleVer))
-                .body("[0].status", is("APPLIED"));
+    public void create_withShortcodeFiveChars_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", UUID.randomUUID().toString(), "name", "Five Char Code", "shortcode", "ABCDE", "created_at", PAST), 400);
     }
 
     @Test
-    void categoryDelete_nonExistent_failed() {
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_DELETE",
-              "entityId":"00000000-0000-0000-0000-000000000000",
-              "payload":{}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("FAILED"));
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // Hue generation
-    // ═══════════════════════════════════════════════════════════════════════
-
-    @Test
-    void categoryCreate_noHue_snapshotContainsValidHue() {
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"name":"Auto Hue Cat","shortCode":"AHC1"}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.hue", notNullValue())
-                .body("[0].snapshot.hue", greaterThanOrEqualTo(0))
-                .body("[0].snapshot.hue", lessThan(360));
+    public void create_withInvalidUuidId_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", "not-a-uuid", "name", "Invalid Id", "shortcode", "INVD", "created_at", PAST), 400);
     }
 
     @Test
-    void categoryCreate_withExplicitHue_hueIsPreserved() {
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"name":"Explicit Hue Cat","shortCode":"EHC1","hue":42}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.hue", is(42));
+    public void create_withCreatedAtInFuture_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", UUID.randomUUID().toString(), "name", "Future Cat", "shortcode", "FUTR", "created_at", FUTURE), 400);
     }
 
     @Test
-    void categoryCreate_autoHue_usesLargestGapAlgorithm() {
-        // Snapshot the existing hues to predict what the server will generate
-        List<Integer> existingHues = given()
-                .when().get("/api/v1/categories")
-                .then().statusCode(200)
-                .extract().jsonPath().getList("hue", Integer.class);
-
-        int expectedHue = computeExpectedHue(existingHues);
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"name":"Gap Test Cat","shortCode":"GTC1"}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.hue", is(expectedHue));
+    public void create_withCreatedAtInPast_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "Past Cat", "shortcode", "PAST", "created_at", PAST));
+        assertTrue(categoryRepository.findByIdOptional(id).isPresent());
     }
 
     @Test
-    void categoryUpdate_withHue_changesHue() {
-        String id = postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"name":"Hue Update Cat","shortCode":"HUC1","hue":100}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getString("[0].entityId");
-
-        long ver = categoryVersion(id);
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"hue":200,"version":%d}}]
-            """.formatted(UUID.randomUUID(), id, ver))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.hue", is(200));
+    public void update_withoutId_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("name", "No Id Update"), 400);
     }
 
     @Test
-    void categoryUpdate_staleVersion_conflictingHue_conflict() {
-        String id = postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_CREATE",
-              "payload":{"name":"Hue Conflict Cat","shortCode":"HCC1","hue":50}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getString("[0].entityId");
+    public void update_withoutDescription_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "Desc Cat", "shortcode", "DESC", "description", "orig", "created_at", PAST));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "Desc Cat 2"));
 
-        long staleVer = categoryVersion(id);
-        advanceCategoryHue(id, 150); // server changes hue to 150
-
-        // Client (stale) sends a different hue — must conflict
-        postCommand("""
-            [{"commandId":"%s","commandType":"CATEGORY_UPDATE",
-              "entityId":"%s",
-              "payload":{"hue":75,"version":%d}}]
-            """.formatted(UUID.randomUUID(), id, staleVer))
-                .body("[0].status", is("CONFLICT"))
-                .body("[0].conflictInfo.conflictingFields", contains("hue"))
-                .body("[0].conflictInfo.serverSnapshot.hue", is(150))
-                .body("[0].conflictInfo.clientPayload.hue", is(75));
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // Category wiring on ITEM
-    // ═══════════════════════════════════════════════════════════════════════
-
-    @Test
-    void itemCreate_withCategory_categoryInSnapshot() {
-        String catId = createCategory("Kitchen", "KI1");
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"ITEM_CREATE",
-              "payload":{"name":"Toaster","containerId":"%s","quantity":1,
-                         "category":{"id":"%s"}}}]
-            """.formatted(UUID.randomUUID(), roomId, catId))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.category.id", is(catId))
-                .body("[0].snapshot.category.shortCode", is("KI1"));
+        Category category = categoryRepository.findByIdOptional(id).orElseThrow();
+        assertEquals("orig", category.description);
     }
 
     @Test
-    void itemCreate_withoutCategory_usesDefaultCategory() {
-        postCommand("""
-            [{"commandId":"%s","commandType":"ITEM_CREATE",
-              "payload":{"name":"Uncategorized Item","containerId":"%s","quantity":1}}]
-            """.formatted(UUID.randomUUID(), roomId))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.category.id", is(defaultCategoryId))
-                .body("[0].snapshot.category.shortCode", is("XX"));
+    public void update_withoutHue_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "Hue Cat", "shortcode", "HUEC", "hue", 42, "created_at", PAST));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "Hue Cat 2"));
+
+        Category category = categoryRepository.findByIdOptional(id).orElseThrow();
+        assertEquals(42, category.hue);
     }
 
     @Test
-    void itemUpdate_changeCategory_applied() {
-        String cat1Id = createCategory("Garden", "GA1");
-        String cat2Id = createCategory("Garage", "GR1");
+    public void update_onlyId_leavesSnapshotUnchanged() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "Unchanged", "shortcode", "UNCH", "description", "d", "hue", 7, "created_at", PAST));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString()));
 
-        String itemId = postCommand("""
-            [{"commandId":"%s","commandType":"ITEM_CREATE",
-              "payload":{"name":"Shovel","containerId":"%s","quantity":1,
-                         "category":{"id":"%s"}}}]
-            """.formatted(UUID.randomUUID(), roomId, cat1Id))
-                .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getString("[0].entityId");
-
-        long ver = given().get("/api/v1/items/" + itemId)
-                .then().statusCode(200).extract().jsonPath().getLong("version");
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Shovel","quantity":1,"category":{"id":"%s"},"version":%d}}]
-            """.formatted(UUID.randomUUID(), itemId, cat2Id, ver))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.category.id", is(cat2Id));
+        Category category = categoryRepository.findByIdOptional(id).orElseThrow();
+        assertEquals("Unchanged", category.name);
+        assertEquals("UNCH", category.shortCode);
+        assertEquals("d", category.description);
+        assertEquals(7, category.hue);
     }
 
     @Test
-    void itemUpdate_staleVersion_conflictingCategory_conflict() {
-        String cat1Id = createCategory("Office", "OF1");
-        String cat2Id = createCategory("Bedroom", "BD1");
-        String cat3Id = createCategory("Hallway", "HW1");
-
-        String itemId = postCommand("""
-            [{"commandId":"%s","commandType":"ITEM_CREATE",
-              "payload":{"name":"Lamp","containerId":"%s","quantity":1,
-                         "category":{"id":"%s"}}}]
-            """.formatted(UUID.randomUUID(), roomId, cat1Id))
-                .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getString("[0].entityId");
-
-        long staleVer = given().get("/api/v1/items/" + itemId)
-                .then().statusCode(200).extract().jsonPath().getLong("version");
-
-        // Server changes category to cat2
-        postCommand("""
-            [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Lamp","quantity":1,"category":{"id":"%s"},"version":%d}}]
-            """.formatted(UUID.randomUUID(), itemId, cat2Id, staleVer))
-                .body("[0].status", is("APPLIED"));
-
-        // Client (stale) tries to set cat3 — should conflict
-        postCommand("""
-            [{"commandId":"%s","commandType":"ITEM_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Lamp","quantity":1,"category":{"id":"%s"},"version":%d}}]
-            """.formatted(UUID.randomUUID(), itemId, cat3Id, staleVer))
-                .body("[0].status", is("CONFLICT"))
-                .body("[0].conflictInfo.conflictingFields", contains("category"));
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // Category wiring on CONTAINER
-    // ═══════════════════════════════════════════════════════════════════════
-
-    @Test
-    void containerCreate_withPrimaryCategory_categoryInSnapshot() {
-        String catId = createCategory("Storage", "ST1");
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CONTAINER_CREATE",
-              "payload":{"name":"Storage Room","containerType":"ROOM",
-                         "primaryCategory":{"id":"%s"}}}]
-            """.formatted(UUID.randomUUID(), catId))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.primaryCategory.id", is(catId))
-                .body("[0].snapshot.primaryCategory.shortCode", is("ST1"));
+    public void create_withHueZero_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "Hue Zero", "shortcode", "HZR", "hue", 0, "created_at", PAST));
+        assertEquals(0, categoryRepository.findByIdOptional(id).orElseThrow().hue);
     }
 
     @Test
-    void containerCreate_withoutPrimaryCategory_usesDefaultCategory() {
-        postCommand("""
-            [{"commandId":"%s","commandType":"CONTAINER_CREATE",
-              "payload":{"name":"Uncategorized Room","containerType":"ROOM"}}]
-            """.formatted(UUID.randomUUID()))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.primaryCategory.id", is(defaultCategoryId))
-                .body("[0].snapshot.primaryCategory.shortCode", is("XX"));
+    public void create_withHue360_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "Hue 360", "shortcode", "H360", "hue", 360, "created_at", PAST));
+        assertEquals(360, categoryRepository.findByIdOptional(id).orElseThrow().hue);
     }
 
     @Test
-    void containerUpdate_changePrimaryCategory_applied() {
-        String cat1Id = createCategory("Workshop", "WS1");
-        String cat2Id = createCategory("Utility", "UT2");
-
-        String containerId = postCommand("""
-            [{"commandId":"%s","commandType":"CONTAINER_CREATE",
-              "payload":{"name":"Workshop Room","containerType":"ROOM",
-                         "primaryCategory":{"id":"%s"}}}]
-            """.formatted(UUID.randomUUID(), cat1Id))
-                .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getString("[0].entityId");
-
-        long ver = given().get("/api/v1/containers/" + containerId)
-                .then().statusCode(200).extract().jsonPath().getLong("version");
-
-        postCommand("""
-            [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Workshop Room","primaryCategory":{"id":"%s"},"version":%d}}]
-            """.formatted(UUID.randomUUID(), containerId, cat2Id, ver))
-                .body("[0].status", is("APPLIED"))
-                .body("[0].snapshot.primaryCategory.id", is(cat2Id));
+    public void create_withHue361_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", UUID.randomUUID().toString(), "name", "Hue 361", "shortcode", "H361", "hue", 361, "created_at", PAST), 400);
     }
 
     @Test
-    void containerUpdate_staleVersion_conflictingPrimaryCategory_conflict() {
-        String cat1Id = createCategory("Basement", "BM1");
-        String cat2Id = createCategory("Attic", "AT1");
-        String cat3Id = createCategory("Porch", "PR1");
+    public void create_withHueMinusOne_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_CREATE",
+                payload("id", UUID.randomUUID().toString(), "name", "Hue -1", "shortcode", "HM1", "hue", -1, "created_at", PAST), 400);
+    }
 
-        String containerId = postCommand("""
-            [{"commandId":"%s","commandType":"CONTAINER_CREATE",
-              "payload":{"name":"Multi Cat Room","containerType":"ROOM",
-                         "primaryCategory":{"id":"%s"}}}]
-            """.formatted(UUID.randomUUID(), cat1Id))
-                .body("[0].status", is("APPLIED"))
-                .extract().jsonPath().getString("[0].entityId");
+    @Test
+    public void create_withoutHue_staysOptional() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "No Hue", "shortcode", "NHUE", "created_at", PAST));
+        assertNull(categoryRepository.findByIdOptional(id).orElseThrow().hue);
+    }
 
-        long staleVer = given().get("/api/v1/containers/" + containerId)
-                .then().statusCode(200).extract().jsonPath().getLong("version");
+    @Test
+    public void update_withoutName_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Stable Name", "shortcode", "STBL", "created_at", PAST));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "description", "changed"));
 
-        // Server changes to cat2
-        postCommand("""
-            [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Multi Cat Room","primaryCategory":{"id":"%s"},"version":%d}}]
-            """.formatted(UUID.randomUUID(), containerId, cat2Id, staleVer))
-                .body("[0].status", is("APPLIED"));
+        assertEquals("Stable Name", categoryRepository.findByIdOptional(id).orElseThrow().name);
+    }
 
-        // Client (stale) tries to set cat3 — should conflict
-        postCommand("""
-            [{"commandId":"%s","commandType":"CONTAINER_UPDATE",
-              "entityId":"%s",
-              "payload":{"name":"Multi Cat Room","primaryCategory":{"id":"%s"},"version":%d}}]
-            """.formatted(UUID.randomUUID(), containerId, cat3Id, staleVer))
-                .body("[0].status", is("CONFLICT"))
-                .body("[0].conflictInfo.conflictingFields", contains("primaryCategory"));
+    @Test
+    public void update_withBlankName_fails() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VLD1", "created_at", PAST));
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "   "), 400);
+    }
+
+    @Test
+    public void update_withNameTwoChars_fails() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VLD2", "created_at", PAST));
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "Ab"), 400);
+    }
+
+    @Test
+    public void update_withoutShortcode_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Keep Code", "shortcode", "KEEP", "created_at", PAST));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "name", "Keep Code 2"));
+
+        assertEquals("KEEP", categoryRepository.findByIdOptional(id).orElseThrow().shortCode);
+    }
+
+    @Test
+    public void update_withBlankShortcode_fails() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VLD3", "created_at", PAST));
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", id.toString(), "shortcode", "   "), 400);
+    }
+
+    @Test
+    public void update_withShortcodeTwoChars_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VLD4", "created_at", PAST));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "shortcode", "XY"));
+
+        assertEquals("XY", categoryRepository.findByIdOptional(id).orElseThrow().shortCode);
+    }
+
+    @Test
+    public void update_withShortcodeFiveChars_fails() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VLD5", "created_at", PAST));
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", id.toString(), "shortcode", "ABCDE"), 400);
+    }
+
+    @Test
+    public void update_withInvalidUuidId_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", "not-a-uuid", "name", "X"), 400);
+    }
+
+    @Test
+    public void update_withCreatedAtInFuture_fails() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VLD6", "created_at", PAST));
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", id.toString(), "created_at", FUTURE), 400);
+    }
+
+    @Test
+    public void update_withCreatedAtInPast_fails() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VLD7", "created_at", PAST));
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", id.toString(), "created_at", PAST), 400);
+    }
+
+    @Test
+    public void update_withEmptyCreatedAt_fails() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VLD8", "created_at", PAST));
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", id.toString(), "created_at", ""), 400);
+    }
+
+    @Test
+    public void update_withHueZero_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VLD9", "created_at", PAST));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "hue", 0));
+
+        assertEquals(0, categoryRepository.findByIdOptional(id).orElseThrow().hue);
+    }
+
+    @Test
+    public void update_withHue360_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VL10", "created_at", PAST));
+        applyOk(head, "CATEGORY_UPDATE", payload("id", id.toString(), "hue", 360));
+
+        assertEquals(360, categoryRepository.findByIdOptional(id).orElseThrow().hue);
+    }
+
+    @Test
+    public void update_withHue361_fails() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VL11", "created_at", PAST));
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", id.toString(), "hue", 361), 400);
+    }
+
+    @Test
+    public void update_withHueMinusOne_fails() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        head = applyOk(head, "CATEGORY_CREATE", payload("id", id.toString(), "name", "Valid", "shortcode", "VL12", "created_at", PAST));
+        applyExpectStatus(head, "CATEGORY_UPDATE", payload("id", id.toString(), "hue", -1), 400);
+    }
+
+    @Test
+    public void delete_withoutId_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_DELETE", payload(), 400);
+    }
+
+    @Test
+    public void delete_withNonExistentId_fails() {
+        UUID head = currentHead();
+        applyExpectStatus(head, "CATEGORY_DELETE", payload("id", UUID.randomUUID().toString()), 400);
+    }
+
+    @Test
+    public void create_withOnlyRequiredFields_succeeds() {
+        UUID head = currentHead();
+        UUID id = UUID.randomUUID();
+        applyOk(head, "CATEGORY_CREATE",
+                payload("id", id.toString(), "name", "Minimal", "shortcode", "MIN1", "created_at", PAST));
+
+        Category category = categoryRepository.findByIdOptional(id).orElseThrow();
+        assertEquals("Minimal", category.name);
+        assertNull(category.description);
+        assertNull(category.hue);
     }
 }

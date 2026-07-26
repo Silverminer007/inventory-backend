@@ -1,36 +1,32 @@
 package de.henzeob.inventory.model.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotNull;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
 @Table(name = "categories")
 public class Category extends PanacheEntityBase {
-    public static final String DEFAULT_SHORT_CODE = "XX";
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     public UUID id;
 
     @Column(nullable = false)
     public String name;
+
+    @Column(columnDefinition = "TEXT")
     public String description;
-    @Column(unique = true, name = "short_code", nullable = false)
+
+    @Column(name = "short_code", nullable = false)
     public String shortCode;
 
-    @Column(nullable = false)
     public Integer hue;
 
-    @Version
-    @NotNull
-    public Long version;
     @Column(name = "created_at", nullable = false, updatable = false)
-    public Instant createdAt = Instant.now();
-    @NotNull
-    @Column(name = "last_modified", nullable = false)
-    public Instant lastModified = Instant.now();
+    public LocalDateTime createdAt;
 }

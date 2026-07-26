@@ -1,0 +1,25 @@
+meta {
+  name: applyCommands - missing head (400)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v2/sync/applyCommands
+  body: json
+  auth: none
+}
+
+docs {
+  `head` is required. Omitted / null / dangling reference must 400.
+}
+
+body:json {
+  []
+}
+
+tests {
+  test("status 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}

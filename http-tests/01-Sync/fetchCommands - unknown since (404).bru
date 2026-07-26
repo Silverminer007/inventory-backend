@@ -1,0 +1,25 @@
+meta {
+  name: fetchCommands - unknown since (404)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v2/sync/fetchCommands?since=99999999-9999-9999-9999-999999999999
+  body: none
+  auth: none
+}
+
+params:query {
+  since: 99999999-9999-9999-9999-999999999999
+}
+
+docs {
+  A syntactically valid but non-existent `since` UUID must 404.
+}
+
+tests {
+  test("status 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}

@@ -1,6 +1,10 @@
 package de.henzeob.inventory.api;
 
+import de.henzeob.inventory.exceptions.InvalidCommandPayloadException;
+import de.henzeob.inventory.exceptions.InvalidCommandReferenceException;
+import de.henzeob.inventory.exceptions.InvalidHeadException;
 import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
@@ -22,7 +26,15 @@ public class GlobalExceptionMapper implements ExceptionMapper<Exception> {
 
         if (exception instanceof NotFoundException) {
             status = Response.Status.NOT_FOUND;
-        } else if (exception instanceof IllegalArgumentException) {
+        } else if (exception instanceof WebApplicationException webApplicationException) {
+            status = Response.Status.fromStatusCode(webApplicationException.getResponse().getStatus());
+        } else if (exception instanceof InvalidHeadException invalidHeadException) {
+            status = Response.Status.CONFLICT;
+            errorResponse.put("message", "Head is not up to date");
+            errorResponse.put("actualHead", invalidHeadException.getActualHead());
+        } else if (exception instanceof InvalidCommandReferenceException
+                || exception instanceof InvalidCommandPayloadException
+                || exception instanceof IllegalArgumentException) {
             status = Response.Status.BAD_REQUEST;
         } else {
             status = Response.Status.INTERNAL_SERVER_ERROR;

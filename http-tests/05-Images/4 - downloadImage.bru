@@ -1,0 +1,25 @@
+meta {
+  name: 4 - downloadImage
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v2/images/{{imageId}}
+  body: none
+  auth: none
+}
+
+docs {
+  Downloads the binary previously uploaded for `imageId`. Returns image/jpeg
+  (the server re-encodes on upload). An unknown id returns 404.
+}
+
+tests {
+  test("status 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("content type is jpeg", function () {
+    expect(res.getHeader('content-type')).to.include('image/jpeg');
+  });
+}

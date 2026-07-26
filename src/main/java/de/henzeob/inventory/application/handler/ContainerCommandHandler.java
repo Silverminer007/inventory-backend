@@ -1,205 +1,139 @@
 package de.henzeob.inventory.application.handler;
 
+import de.henzeob.inventory.application.CategoryService;
 import de.henzeob.inventory.application.ContainerService;
-import de.henzeob.inventory.mapper.ContainerMapper;
-import de.henzeob.inventory.model.dto.CategorySummaryDTO;
-import de.henzeob.inventory.model.dto.ContainerDTO;
-import de.henzeob.inventory.model.entity.Command;
+import de.henzeob.inventory.exceptions.InvalidCommandPayloadException;
+import de.henzeob.inventory.model.entity.Category;
 import de.henzeob.inventory.model.entity.Container;
-import de.henzeob.inventory.model.entity.ContainerType;
+import de.henzeob.inventory.model.entity.Image;
 import de.henzeob.inventory.model.enums.CommandType;
-import de.henzeob.inventory.repository.CommandRepository;
-import de.henzeob.inventory.repository.ContainerRepository;
+import de.henzeob.inventory.repository.ImageRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import static de.henzeob.inventory.application.handler.CommandPayloadUtils.required;
-import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toLong;
-import static de.henzeob.inventory.application.handler.CommandPayloadUtils.toUUID;
+import static de.henzeob.inventory.application.handler.PayloadValidator.optionalName;
+import static de.henzeob.inventory.application.handler.PayloadValidator.optionalString;
+import static de.henzeob.inventory.application.handler.PayloadValidator.optionalUUID;
+import static de.henzeob.inventory.application.handler.PayloadValidator.requireCreatedAtBeforeNow;
+import static de.henzeob.inventory.application.handler.PayloadValidator.requireName;
+import static de.henzeob.inventory.application.handler.PayloadValidator.requireOnlyKeys;
+import static de.henzeob.inventory.application.handler.PayloadValidator.requireUUID;
 
 @ApplicationScoped
 public class ContainerCommandHandler {
+
+    private static final Set<String> CREATE_REQUIRED = Set.of("id", "name", "parent", "created_at");
+    private static final Set<String> CREATE_OPTIONAL = Set.of("description", "position", "category", "type");
+    private static final Set<String> UPDATE_REQUIRED = Set.of("id");
+    private static final Set<String> UPDATE_OPTIONAL =
+            Set.of("name", "parent", "category", "description", "position", "primary_image", "type");
+    private static final Set<String> DELETE_REQUIRED = Set.of("id");
+    private static final Set<String> DELETE_OPTIONAL = Set.of();
 
     @Inject
     ContainerService containerService;
 
     @Inject
-    ContainerMapper containerMapper;
+    CategoryService categoryService;
 
     @Inject
-    ContainerRepository containerRepository;
+    ImageRepository imageRepository;
 
     @Inject
-    CommandRepository commandRepository;
+    Clock clock;
 
-    public Object handle(CommandType type, Command command, String userId) {
-        Map<String, Object> p = command.payload;
-        return switch (type) {
-            case CONTAINER_CREATE -> handleCreate(p, userId);
-            case CONTAINER_UPDATE -> handleUpdate(command.entityId, p, userId);
-            case CONTAINER_DELETE -> handleDelete(command.entityId, userId, p);
-            case CONTAINER_MOVE   -> handleMove(command.entityId, p, userId);
+    public void handle(CommandType type, Map<String, Object> payload) {
+        switch (type) {
+            case CONTAINER_CREATE -> handleCreate(payload);
+            case CONTAINER_UPDATE -> handleUpdate(payload);
+            case CONTAINER_DELETE -> handleDelete(payload);
             default -> throw new IllegalArgumentException("Not a CONTAINER command: " + type);
-        };
+        }
     }
 
-    private ContainerDTO handleCreate(Map<String, Object> p, String userId) {
-        Container container = new Container();
-        if (p.get("id") != null) container.id = toUUID(p.get("id")); // optional client-provided UUID
-        container.name = required(p, "name");
-        container.description = (String) p.get("description");
-        container.containerType = ContainerType.valueOf(required(p, "containerType").toString());
-        container.position = (String) p.get("position");
-        container.location = (String) p.get("location");
-        UUID parentId = toUUID(p.get("parentContainerId"));
-        UUID categoryId = p.get("primaryCategory") instanceof Map<?, ?> catMap ? toUUID(catMap.get("id")) : null;
-        Container created = containerService.createContainer(container, parentId, categoryId, userId);
-        return containerMapper.toDTO(created);
+    private void handleCreate(Map<String, Object> p) {
+        requireOnlyKeys(p, CREATE_REQUIRED, CREATE_OPTIONAL);
+
+        UUID id = requireUUID(p, "id");
+        String name = requireName(p, "name");
+        UUID parentId = requireUUID(p, "parent");
+        LocalDateTime createdAt = requireCreatedAtBeforeNow(p, "created_at", clock);
+        String description = optionalString(p, "description");
+        String position = optionalString(p, "position");
+        String type = optionalString(p, "type");
+        UUID categoryId = optionalUUID(p, "category");
+
+        Container parent = containerService.getExisting(parentId);
+        Category category = categoryId != null ? categoryService.getExisting(categoryId) : null;
+
+        Container container = containerService.create(id, name, description, parent, position, type, createdAt);
+        container.category = category;
     }
 
-    private Object handleUpdate(UUID entityId, Map<String, Object> p, String userId) {
-        Long clientVersion = toLong(p.get("version"));
-        boolean force = Boolean.TRUE.equals(p.get("force"));
+    private void handleUpdate(Map<String, Object> p) {
+        requireOnlyKeys(p, UPDATE_REQUIRED, UPDATE_OPTIONAL);
 
-        Container container = containerRepository.findByIdAndUser(entityId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Container not found: " + entityId));
+        UUID id = requireUUID(p, "id");
+        if (id.equals(Container.ROOT_ID)) {
+            throw new InvalidCommandPayloadException();
+        }
+        Container container = containerService.getExisting(id);
 
-        if (force || clientVersion == null || container.version.equals(clientVersion)) {
-            return applyUpdate(entityId, p, userId);
+        String name = optionalName(p, "name");
+        if (name != null) {
+            container.name = name;
         }
-
-        long versionGap = container.version - clientVersion;
-        Set<String> serverChanged = serverChangedContainerFields(entityId, versionGap);
-
-        List<String> conflictingFields = new ArrayList<>();
-
-        if (p.containsKey("name") && !Objects.equals(p.get("name"), container.name)
-                && serverChanged.contains("name")) {
-            conflictingFields.add("name");
+        if (p.containsKey("description")) {
+            container.description = optionalString(p, "description");
         }
-        if (p.containsKey("description") && !Objects.equals(p.get("description"), container.description)
-                && serverChanged.contains("description")) {
-            conflictingFields.add("description");
+        if (p.containsKey("position")) {
+            container.position = optionalString(p, "position");
         }
-        if (p.containsKey("position") && !Objects.equals(p.get("position"), container.position)
-                && serverChanged.contains("position")) {
-            conflictingFields.add("position");
+        if (p.containsKey("type")) {
+            container.type = optionalString(p, "type");
         }
-        if (p.containsKey("location") && !Objects.equals(p.get("location"), container.location)
-                && serverChanged.contains("location")) {
-            conflictingFields.add("location");
+        if (p.containsKey("parent")) {
+            UUID parentId = requireUUID(p, "parent");
+            Container newParent = containerService.getExisting(parentId);
+            containerService.assertValidParent(id, newParent);
+            container.parentContainer = newParent;
         }
-        if (p.containsKey("primaryCategory") && p.get("primaryCategory") instanceof Map<?, ?> catMap) {
-            UUID clientCategoryId = toUUID(catMap.get("id"));
-            UUID serverCategoryId = container.primaryCategory != null ? container.primaryCategory.id : null;
-            if (!Objects.equals(clientCategoryId, serverCategoryId) && serverChanged.contains("primaryCategory")) {
-                conflictingFields.add("primaryCategory");
-            }
+        if (p.containsKey("category")) {
+            UUID categoryId = optionalUUID(p, "category");
+            container.category = categoryId != null ? categoryService.getExisting(categoryId) : null;
         }
-
-        if (!conflictingFields.isEmpty()) {
-            ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
-            info.clientVersion = clientVersion;
-            info.serverVersion = container.version;
-            info.conflictingFields = conflictingFields;
-            info.serverSnapshot = containerMapper.toDTO(container);
-            info.clientPayload = p;
-            return new ConflictResult.Conflicted(info);
+        if (p.containsKey("primary_image")) {
+            container.primaryImage = resolvePrimaryImage(p.get("primary_image"), container);
         }
-
-        // Auto-merge
-        ContainerDTO overlayDto = containerMapper.toDTO(container);
-        if (p.containsKey("name"))         overlayDto.name = (String) p.get("name");
-        if (p.containsKey("description"))  overlayDto.description = (String) p.get("description");
-        if (p.containsKey("position"))     overlayDto.position = (String) p.get("position");
-        if (p.containsKey("location"))     overlayDto.location = (String) p.get("location");
-        if (p.containsKey("primaryCategory") && p.get("primaryCategory") instanceof Map<?, ?> catMap) {
-            overlayDto.primaryCategory = new CategorySummaryDTO();
-            overlayDto.primaryCategory.id = toUUID(catMap.get("id"));
-        }
-        return containerService.updateContainer(entityId, overlayDto, userId);
     }
 
-    private Set<String> serverChangedContainerFields(UUID entityId, long versionGap) {
-        if (versionGap <= 0) return Set.of();
-        List<Command> recent = commandRepository.findRecentApplied(
-                entityId, "CONTAINER", (int) Math.min(versionGap, 100));
-        Set<String> meta = Set.of("version", "force", "containerType", "parentContainerId", "newParentContainerId");
-        Set<String> changed = new HashSet<>();
-        for (Command cmd : recent) {
-            if (cmd.commandType == CommandType.CONTAINER_UPDATE && cmd.payload != null) {
-                for (String key : cmd.payload.keySet()) {
-                    if (!meta.contains(key)) changed.add(key);
-                }
-            }
+    private Image resolvePrimaryImage(Object rawValue, Container container) {
+        if (rawValue == null) {
+            return null;
         }
-        return changed;
+        UUID imageId;
+        try {
+            imageId = UUID.fromString(rawValue.toString());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidCommandPayloadException();
+        }
+        Image image = imageRepository.findByIdOptional(imageId)
+                .orElseThrow(InvalidCommandPayloadException::new);
+        if (image.container == null || !image.container.id.equals(container.id)) {
+            throw new InvalidCommandPayloadException();
+        }
+        return image;
     }
 
-    private ContainerDTO applyUpdate(UUID entityId, Map<String, Object> p, String userId) {
-        ContainerDTO dto = new ContainerDTO();
-        dto.name = (String) p.get("name");
-        dto.description = (String) p.get("description");
-        dto.position = (String) p.get("position");
-        dto.location = (String) p.get("location");
-        dto.version = toLong(p.get("version"));
-        if (p.get("primaryCategory") instanceof Map<?, ?> catMap) {
-            dto.primaryCategory = new CategorySummaryDTO();
-            dto.primaryCategory.id = toUUID(catMap.get("id"));
-        }
-        return containerService.updateContainer(entityId, dto, userId);
-    }
-
-    private Object handleDelete(UUID entityId, String userId, Map<String, Object> p) {
-        Long clientVersion = toLong(p.get("version"));
-        boolean force = Boolean.TRUE.equals(p.get("force"));
-
-        if (!force && clientVersion != null) {
-            Container container = containerRepository.findByIdAndUser(entityId, userId)
-                    .orElseThrow(() -> new IllegalArgumentException("Container not found: " + entityId));
-            if (container.version > clientVersion) {
-                ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
-                info.clientVersion = clientVersion;
-                info.serverVersion = container.version;
-                info.conflictingFields = List.of();
-                info.serverSnapshot = containerMapper.toDTO(container);
-                info.clientPayload = p;
-                return new ConflictResult.Conflicted(info);
-            }
-        }
-
-        containerService.deleteContainer(entityId, userId);
-        return null;
-    }
-
-    private Object handleMove(UUID entityId, Map<String, Object> p, String userId) {
-        Long clientVersion = toLong(p.get("version"));
-        boolean force = Boolean.TRUE.equals(p.get("force"));
-
-        if (!force && clientVersion != null) {
-            Container container = containerRepository.findByIdAndUser(entityId, userId)
-                    .orElseThrow(() -> new IllegalArgumentException("Container not found: " + entityId));
-            if (container.version > clientVersion) {
-                ConflictResult.ConflictInfo info = new ConflictResult.ConflictInfo();
-                info.clientVersion = clientVersion;
-                info.serverVersion = container.version;
-                info.conflictingFields = List.of();
-                info.serverSnapshot = containerMapper.toDTO(container);
-                info.clientPayload = p;
-                return new ConflictResult.Conflicted(info);
-            }
-        }
-
-        UUID newParentId = toUUID(p.get("newParentContainerId"));
-        Container moved = containerService.moveContainer(entityId, newParentId, userId);
-        return containerMapper.toDTOWithChildren(moved);
+    private void handleDelete(Map<String, Object> p) {
+        requireOnlyKeys(p, DELETE_REQUIRED, DELETE_OPTIONAL);
+        UUID id = requireUUID(p, "id");
+        containerService.delete(id);
     }
 }

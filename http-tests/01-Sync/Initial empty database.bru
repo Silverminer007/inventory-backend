@@ -1,0 +1,51 @@
+meta {
+  name: Initial empty database
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v2/sync/fetchCommands
+  body: none
+  auth: none
+}
+
+docs {
+  Precondition guard for the whole collection: verifies the backend is running
+  against a fresh, empty database. In that state the command chain contains only
+  the server-seeded ROOT command, so `fetchCommands` returns exactly one entry
+  whose id is the root id, with no parent and no child (root == head).
+
+  Run this FIRST, before any applyCommands scenario. Once other scenarios have
+  appended commands the chain grows past root and this test is expected to fail
+  until the database is reset.
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    const list = res.getBody();
+    if (Array.isArray(list) && list.length > 0) {
+      bru.setVar('head', list[list.length - 1].command.id);
+    }
+  }
+}
+
+tests {
+  test("status 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("chain contains exactly the root command", function () {
+    const list = res.getBody();
+    expect(list).to.be.an('array').with.lengthOf(1);
+  });
+  test("the single command is the ROOT command", function () {
+    const entry = res.getBody()[0];
+    expect(entry.command.id).to.equal(bru.getEnvVar('rootId'));
+    expect(entry.command.command_type).to.equal('CONTAINER_CREATE');
+  });
+  test("root has no parent and no child (root == head)", function () {
+    const entry = res.getBody()[0];
+    expect(entry.parent, 'parent').to.be.null;
+    expect(entry.child, 'child').to.be.null;
+  });
+}

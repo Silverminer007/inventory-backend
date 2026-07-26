@@ -1,18 +1,22 @@
 package de.henzeob.inventory.model.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "photos")
+@Table(name = "images")
 public class Image extends PanacheEntityBase {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     public UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -23,29 +27,12 @@ public class Image extends PanacheEntityBase {
     @JoinColumn(name = "container_id")
     public Container container;
 
-    @NotBlank
-    @Column(name = "s3_key", nullable = false, length = 500)
+    @Column(name = "s3_key", length = 500)
     public String s3Key;
-
-    @Column(name = "s3_url", length = 1000)
-    public String s3Url;
-
-    @Column(length = 255)
-    public String filename;
 
     @Column(name = "content_type", length = 100)
     public String contentType;
 
-    @Column(name = "file_size")
-    public Long fileSize;
-
-    @Column(name = "is_primary", nullable = false)
-    public boolean isPrimary = false;
-
-    @Column(name = "uploaded_at", nullable = false, updatable = false)
-    public LocalDateTime uploadedAt = LocalDateTime.now();
-
-    @NotBlank
-    @Column(name = "user_id", nullable = false)
-    public String userId;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    public LocalDateTime createdAt;
 }

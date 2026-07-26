@@ -1,0 +1,25 @@
+meta {
+  name: fetchCommands - invalid since (400)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v2/sync/fetchCommands?since=123123
+  body: none
+  auth: none
+}
+
+params:query {
+  since: 123123
+}
+
+docs {
+  A malformed (non-UUID) `since` value must 400.
+}
+
+tests {
+  test("status 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}

@@ -1,0 +1,60 @@
+meta {
+  name: applyCommands - stale head (409)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v2/sync/applyCommands?head={{rootId}}
+  body: json
+  auth: none
+}
+
+params:query {
+  head: {{rootId}}
+}
+
+docs {
+  Applying against a head that is no longer the tip must 409. This uses the root
+  command id as `head`; root has a child as soon as any command has been appended.
+  In a full `bru run` the earlier create folders guarantee that, so this 409s.
+  (Run in isolation against a truly fresh DB where root == head it would succeed.)
+}
+
+script:pre-request {
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  bru.setVar('staleCmdId', uuid());
+  bru.setVar('staleContainerId', uuid());
+}
+
+body:json {
+  [
+    {
+      "parent": "{{rootId}}",
+      "child": null,
+      "command": {
+        "id": "{{staleCmdId}}",
+        "command_type": "CONTAINER_CREATE",
+        "command_version": 1,
+        "payload": {
+          "id": "{{staleContainerId}}",
+          "name": "Stale Head Container",
+          "parent": "{{rootId}}",
+          "created_at": "2000-01-01T00:00:00"
+        }
+      }
+    }
+  ]
+}
+
+tests {
+  test("status 409 (once chain has moved past root)", function () {
+    expect(res.getStatus()).to.equal(409);
+  });
+}

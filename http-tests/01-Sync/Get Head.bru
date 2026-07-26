@@ -1,0 +1,40 @@
+meta {
+  name: Get Head
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v2/sync/fetchCommands
+  body: none
+  auth: none
+}
+
+docs {
+  Fetches the full command chain (root -> head) and stores the current head id
+  into the runtime var `head`. Run this once before any applyCommands scenario;
+  the apply requests advance `head` automatically on success.
+}
+
+script:post-response {
+  const list = res.getBody();
+  if (Array.isArray(list) && list.length > 0) {
+    bru.setVar('head', list[list.length - 1].command.id);
+  } else {
+    bru.setVar('head', bru.getEnvVar('rootId'));
+  }
+  bru.setVar('commandCount', Array.isArray(list) ? list.length : 0);
+}
+
+tests {
+  test("status 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("chain starts at root container command", function () {
+    const list = res.getBody();
+    expect(list[0].command.id).to.equal(bru.getEnvVar('rootId'));
+  });
+  test("head captured", function () {
+    expect(bru.getVar('head')).to.be.a('string');
+  });
+}
